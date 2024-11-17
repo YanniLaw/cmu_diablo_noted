@@ -132,7 +132,7 @@ void odometryHandler(const nav_msgs::msg::Odometry::ConstSharedPtr odom) {
   sinVehicleYaw = sin(vehicleYaw);
   cosVehicleYaw = cos(vehicleYaw);
 
-  if (noDataInited == 0) {
+  if (noDataInited == 0) { // 新接收的数据
     vehicleXRec = vehicleX;
     vehicleYRec = vehicleY;
     noDataInited = 1;
@@ -140,15 +140,16 @@ void odometryHandler(const nav_msgs::msg::Odometry::ConstSharedPtr odom) {
   if (noDataInited == 1) {
     float dis = sqrt((vehicleX - vehicleXRec) * (vehicleX - vehicleXRec) +
                      (vehicleY - vehicleYRec) * (vehicleY - vehicleYRec));
-    if (dis >= noDecayDis)
+    if (dis >= noDecayDis) // 车辆移动超过一定的距离
       noDataInited = 2;
   }
 }
 
 // registered laser scan callback function
+// 接收到的激光雷达的坐标系在map系下
 void laserCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr laserCloud2) {
   laserCloudTime = rclcpp::Time(laserCloud2->header.stamp).seconds();
-  if (!systemInited) {
+  if (!systemInited) { // 以第一帧激光雷达为系统初始化时间
     systemInitTime = laserCloudTime;
     systemInited = true;
   }
@@ -165,16 +166,17 @@ void laserCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr laser
     float pointX = point.x;
     float pointY = point.y;
     float pointZ = point.z;
-
+    // 计算该点到vehicle中心的水平距离
     float dis = sqrt((pointX - vehicleX) * (pointX - vehicleX) +
                      (pointY - vehicleY) * (pointY - vehicleY));
+    // 从两个维度(竖直和水平)对点云进行裁剪
     if (pointZ - vehicleZ > minRelZ - disRatioZ * dis &&
         pointZ - vehicleZ < maxRelZ + disRatioZ * dis &&
         dis < terrainVoxelSize * (terrainVoxelHalfWidth + 1)) {
       point.x = pointX;
       point.y = pointY;
       point.z = pointZ;
-      point.intensity = laserCloudTime - systemInitTime;
+      point.intensity = laserCloudTime - systemInitTime; // 当前时间-初始化时间
       laserCloudCrop->push_back(point);
     }
   }
@@ -275,7 +277,7 @@ int main(int argc, char **argv) {
   bool status = rclcpp::ok();
   while (status) {
     rclcpp::spin_some(nh);
-    if (newlaserCloud) {
+    if (newlaserCloud) { // 接收到点云后进行处理
       newlaserCloud = false;
 
       // terrain voxel roll over
