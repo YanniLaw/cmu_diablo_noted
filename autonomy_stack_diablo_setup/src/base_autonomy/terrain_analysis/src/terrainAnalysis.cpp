@@ -44,7 +44,7 @@ bool considerDrop = false;
 bool limitGroundLift = false;
 double maxGroundLift = 0.15;
 bool clearDyObs = false;
-double minDyObsDis = 0.3;
+double minDyObsDis = 0.3; // 清除动态障碍物的最小距离
 double minDyObsAngle = 0;
 double minDyObsRelZ = -0.5;
 double absDyObsRelZThre = 0.2;
@@ -62,18 +62,41 @@ double maxRelZ = 0.2;
 double disRatioZ = 0.2;
 
 // terrain voxel parameters
-float terrainVoxelSize = 1.0;
+// 地形体素参数，地形分析是对一个长宽一样的立方体进行分析
+// 简要介绍下地形体素的排放
+/*
+                  ^ y 
+                  |
+         —————————|—————————  （max_x，max_y）
+        |         |         |
+        |         |         |
+        |         |         |
+        |         | - - - - - - - - - - > x
+        |         |         |
+        |         |         |
+        |         |         |
+         —————————|—————————
+      （0，0）     |
+                  |
+                  |
+其体素分布类似于occmap，是一个正方形区域，
+其中，正方形左下角为坐标原点，右上角为最大值terrainVoxelWidth
+terrainVoxelCloud是一个一维数组，存储了里面的所有数据，类似于occmap，按行(x)优先的顺序进行排列
+*/
+
+float terrainVoxelSize = 1.0;   // 地形体素尺寸大小，其实就是分辨率
 int terrainVoxelShiftX = 0;
 int terrainVoxelShiftY = 0;
-const int terrainVoxelWidth = 21;
-int terrainVoxelHalfWidth = (terrainVoxelWidth - 1) / 2;
-const int terrainVoxelNum = terrainVoxelWidth * terrainVoxelWidth;
+const int terrainVoxelWidth = 21; // 地形体素总宽度
+int terrainVoxelHalfWidth = (terrainVoxelWidth - 1) / 2; // 一半宽度
+const int terrainVoxelNum = terrainVoxelWidth * terrainVoxelWidth; // 地形体素的总数量
 
 // planar voxel parameters
-float planarVoxelSize = 0.2;
-const int planarVoxelWidth = 51;
-int planarVoxelHalfWidth = (planarVoxelWidth - 1) / 2;
-const int planarVoxelNum = planarVoxelWidth * planarVoxelWidth;
+// 平面体素参数
+float planarVoxelSize = 0.2; // 平面体素尺寸
+const int planarVoxelWidth = 51; // 平面体素宽度
+int planarVoxelHalfWidth = (planarVoxelWidth - 1) / 2; // 平面体素半宽
+const int planarVoxelNum = planarVoxelWidth * planarVoxelWidth; // 平面体素总数量
 
 pcl::PointCloud<pcl::PointXYZI>::Ptr
     laserCloud(new pcl::PointCloud<pcl::PointXYZI>());
@@ -100,7 +123,7 @@ bool newlaserCloud = false;
 double systemInitTime = 0;
 bool systemInited = false;
 int noDataInited = 0;
-
+// 当前robot的位姿
 float vehicleRoll = 0, vehiclePitch = 0, vehicleYaw = 0;
 float vehicleX = 0, vehicleY = 0, vehicleZ = 0;
 float vehicleXRec = 0, vehicleYRec = 0;
@@ -281,9 +304,13 @@ int main(int argc, char **argv) {
       newlaserCloud = false;
 
       // terrain voxel roll over
+      // 当前地形体素的中心位置(int型，世界坐标系下)
+      // 在每次循环开始的时候terrainVoxelShiftX都代表上一次的体素中心坐标
       float terrainVoxelCenX = terrainVoxelSize * terrainVoxelShiftX;
       float terrainVoxelCenY = terrainVoxelSize * terrainVoxelShiftY;
-
+      // 下面做的内容都是滑动地图，类似于滑窗，使得整个terrainVoxelCloud都是以当前机器人位置为中心
+      // 机器人x负方向移动超过一个体素大小
+      // 则所有体素朝x正方向移动一个体素大小，并清空x负方向最左边的一列体素
       while (vehicleX - terrainVoxelCenX < -terrainVoxelSize) {
         for (int indY = 0; indY < terrainVoxelWidth; indY++) {
           pcl::PointCloud<pcl::PointXYZI>::Ptr terrainVoxelCloudPtr =
@@ -299,7 +326,7 @@ int main(int argc, char **argv) {
         terrainVoxelShiftX--;
         terrainVoxelCenX = terrainVoxelSize * terrainVoxelShiftX;
       }
-
+      // 机器人x正方向移动超过一个体素大小
       while (vehicleX - terrainVoxelCenX > terrainVoxelSize) {
         for (int indY = 0; indY < terrainVoxelWidth; indY++) {
           pcl::PointCloud<pcl::PointXYZI>::Ptr terrainVoxelCloudPtr =
@@ -316,7 +343,7 @@ int main(int argc, char **argv) {
         terrainVoxelShiftX++;
         terrainVoxelCenX = terrainVoxelSize * terrainVoxelShiftX;
       }
-
+      // 机器人y负方向移动超过一个体素大小
       while (vehicleY - terrainVoxelCenY < -terrainVoxelSize) {
         for (int indX = 0; indX < terrainVoxelWidth; indX++) {
           pcl::PointCloud<pcl::PointXYZI>::Ptr terrainVoxelCloudPtr =
@@ -332,7 +359,7 @@ int main(int argc, char **argv) {
         terrainVoxelShiftY--;
         terrainVoxelCenY = terrainVoxelSize * terrainVoxelShiftY;
       }
-
+      // 机器人y正方向移动超过一个体素大小
       while (vehicleY - terrainVoxelCenY > terrainVoxelSize) {
         for (int indX = 0; indX < terrainVoxelWidth; indX++) {
           pcl::PointCloud<pcl::PointXYZI>::Ptr terrainVoxelCloudPtr =
@@ -352,13 +379,15 @@ int main(int argc, char **argv) {
 
       // stack registered laser scans
       pcl::PointXYZI point;
+      // laserCloudCrop中的点都为map坐标
       int laserCloudCropSize = laserCloudCrop->points.size();
+      // 将当前帧点云中的点加入到对应体素数组中，并更新对应体素中拥有的相应的点云数目
       for (int i = 0; i < laserCloudCropSize; i++) {
         point = laserCloudCrop->points[i];
-
+        // 计算当前点在地形体素中的索引
         int indX = int((point.x - vehicleX + terrainVoxelSize / 2) /
                        terrainVoxelSize) +
-                   terrainVoxelHalfWidth;
+                   terrainVoxelHalfWidth; // 加上半宽是因为体素数组在地图的左下角才是(0,0)
         int indY = int((point.y - vehicleY + terrainVoxelSize / 2) /
                        terrainVoxelSize) +
                    terrainVoxelHalfWidth;
@@ -369,12 +398,12 @@ int main(int argc, char **argv) {
           indY--;
 
         if (indX >= 0 && indX < terrainVoxelWidth && indY >= 0 &&
-            indY < terrainVoxelWidth) {
+            indY < terrainVoxelWidth) { // 确保处理的点在附近地形体素范围内
           terrainVoxelCloud[terrainVoxelWidth * indX + indY]->push_back(point);
           terrainVoxelUpdateNum[terrainVoxelWidth * indX + indY]++;
         }
       }
-
+      // 更新当前地形体素数组数据
       for (int ind = 0; ind < terrainVoxelNum; ind++) {
         if (terrainVoxelUpdateNum[ind] >= voxelPointUpdateThre ||
             laserCloudTime - systemInitTime - terrainVoxelUpdateTime[ind] >=
@@ -402,12 +431,12 @@ int main(int argc, char **argv) {
               terrainVoxelCloudPtr->push_back(point);
             }
           }
-
+          // 重置
           terrainVoxelUpdateNum[ind] = 0;
           terrainVoxelUpdateTime[ind] = laserCloudTime - systemInitTime;
         }
       }
-
+      // 获取最新附近5米范围(100m^2)的体素点云
       terrainCloud->clear();
       for (int indX = terrainVoxelHalfWidth - 5;
            indX <= terrainVoxelHalfWidth + 5; indX++) {
@@ -424,11 +453,11 @@ int main(int argc, char **argv) {
         planarVoxelDyObs[i] = 0;
         planarPointElev[i].clear();
       }
-
+      // 对机器人附近100m^2范围的点云，划分为400个分辨率为0.2的格子(更细的分辨率)，进行地面估计
       int terrainCloudSize = terrainCloud->points.size();
       for (int i = 0; i < terrainCloudSize; i++) {
         point = terrainCloud->points[i];
-
+        // 计算在平面细分辨率体素中的索引
         int indX =
             int((point.x - vehicleX + planarVoxelSize / 2) / planarVoxelSize) +
             planarVoxelHalfWidth;
@@ -440,7 +469,7 @@ int main(int argc, char **argv) {
           indX--;
         if (point.y - vehicleY + planarVoxelSize / 2 < 0)
           indY--;
-
+        // 将当前点的高度值存储到当前平面体素及其邻域的 3×3 网格单元中，邻域扩展的目的是处理网格边界或降低数据稀疏性
         if (point.z - vehicleZ > minRelZ && point.z - vehicleZ < maxRelZ) {
           for (int dX = -1; dX <= 1; dX++) {
             for (int dY = -1; dY <= 1; dY++) {
@@ -459,11 +488,12 @@ int main(int argc, char **argv) {
             float pointX1 = point.x - vehicleX;
             float pointY1 = point.y - vehicleY;
             float pointZ1 = point.z - vehicleZ;
-
+            // 动态障碍物的初步距离和角度筛选
             float dis1 = sqrt(pointX1 * pointX1 + pointY1 * pointY1);
             if (dis1 > minDyObsDis) {
               float angle1 = atan2(pointZ1 - minDyObsRelZ, dis1) * 180.0 / PI;
               if (angle1 > minDyObsAngle) {
+                // 将世界坐标系下的点转到机身坐标系下 ZYX顺序
                 float pointX2 =
                     pointX1 * cosVehicleYaw + pointY1 * sinVehicleYaw;
                 float pointY2 =
@@ -488,7 +518,7 @@ int main(int argc, char **argv) {
                   planarVoxelDyObs[planarVoxelWidth * indX + indY]++;
                 }
               }
-            } else {
+            } else { // 距离较近的点的处理
               planarVoxelDyObs[planarVoxelWidth * indX + indY] +=
                   minDyObsPointNum;
             }
