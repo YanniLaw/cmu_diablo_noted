@@ -99,9 +99,9 @@ int planarVoxelHalfWidth = (planarVoxelWidth - 1) / 2; // 平面体素半宽
 const int planarVoxelNum = planarVoxelWidth * planarVoxelWidth; // 平面体素总数量
 
 pcl::PointCloud<pcl::PointXYZI>::Ptr
-    laserCloud(new pcl::PointCloud<pcl::PointXYZI>());
+    laserCloud(new pcl::PointCloud<pcl::PointXYZI>()); // ros转换过来的点云数据
 pcl::PointCloud<pcl::PointXYZI>::Ptr
-    laserCloudCrop(new pcl::PointCloud<pcl::PointXYZI>());
+    laserCloudCrop(new pcl::PointCloud<pcl::PointXYZI>());  // 裁剪后的点云数据
 pcl::PointCloud<pcl::PointXYZI>::Ptr
     laserCloudDwz(new pcl::PointCloud<pcl::PointXYZI>());
 pcl::PointCloud<pcl::PointXYZI>::Ptr
@@ -120,13 +120,13 @@ vector<float> planarPointElev[planarVoxelNum];
 double laserCloudTime = 0;
 bool newlaserCloud = false;
 
-double systemInitTime = 0;
-bool systemInited = false;
+double systemInitTime = 0; // 系统初始化时间(用第一帧雷达数据)
+bool systemInited = false; // 系统初始化的标志
 int noDataInited = 0;
 // 当前robot的位姿
-float vehicleRoll = 0, vehiclePitch = 0, vehicleYaw = 0;
-float vehicleX = 0, vehicleY = 0, vehicleZ = 0;
-float vehicleXRec = 0, vehicleYRec = 0;
+float vehicleRoll = 0, vehiclePitch = 0, vehicleYaw = 0; // 机器人当前姿态
+float vehicleX = 0, vehicleY = 0, vehicleZ = 0; // 机器人当前位置
+float vehicleXRec = 0, vehicleYRec = 0; // 新接收数据时机器人的位置
 
 float sinVehicleRoll = 0, cosVehicleRoll = 0;
 float sinVehiclePitch = 0, cosVehiclePitch = 0;
@@ -179,7 +179,7 @@ void laserCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr laser
 
   laserCloud->clear();
   pcl::fromROSMsg(*laserCloud2, *laserCloud);
-
+  // 点云裁剪，保留车辆附近的点
   pcl::PointXYZI point;
   laserCloudCrop->clear();
   int laserCloudSize = laserCloud->points.size();
@@ -192,14 +192,16 @@ void laserCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr laser
     // 计算该点到vehicle中心的水平距离
     float dis = sqrt((pointX - vehicleX) * (pointX - vehicleX) +
                      (pointY - vehicleY) * (pointY - vehicleY));
-    // 从两个维度(竖直和水平)对点云进行裁剪
+    // 从两个维度(竖直和水平)对点云进行裁剪 minRelZ: -1.5  maxRelZ: 0.3
+    // disRatioZ 是一个调整因子，表示高度裁剪范围随水平距离的变化。越远的点，允许的高度范围越宽
+    // 高度裁剪范围随距离变化, 可以动态适应不同环境需求
     if (pointZ - vehicleZ > minRelZ - disRatioZ * dis &&
         pointZ - vehicleZ < maxRelZ + disRatioZ * dis &&
         dis < terrainVoxelSize * (terrainVoxelHalfWidth + 1)) {
       point.x = pointX;
       point.y = pointY;
       point.z = pointZ;
-      point.intensity = laserCloudTime - systemInitTime; // 当前时间-初始化时间
+      point.intensity = laserCloudTime - systemInitTime; // 每个点的强度都自定义为 当前时间-初始化时间
       laserCloudCrop->push_back(point);
     }
   }
@@ -209,7 +211,7 @@ void laserCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr laser
 
 // joystick callback function
 void joystickHandler(const sensor_msgs::msg::Joy::ConstSharedPtr joy) {
-  if (joy->buttons[5] > 0.5) {
+  if (joy->buttons[5] > 0.5) { // 右肩键R1  0:未按下 1:按下
     noDataInited = 0;
     clearingCloud = true;
   }
