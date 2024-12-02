@@ -36,7 +36,7 @@ const double PI = 3.1415926;
 double scanVoxelSize = 0.05;
 double decayTime = 2.0;
 double noDecayDis = 4.0;
-double clearingDis = 8.0;
+double clearingDis = 8.0; // 清除该距离内的所有点云
 bool clearingCloud = false;
 bool useSorting = true;
 double quantileZ = 0.25;
@@ -64,6 +64,8 @@ double disRatioZ = 0.2;
 // terrain voxel parameters
 // 地形体素参数，地形分析是对一个长宽一样的立方体进行分析
 // 简要介绍下地形体素的排放
+// 每个体素的格子大小为0.2m，该地形一共有 21 * 21 = 441 个格子
+// 换算成物理实际面积大概 4.2 * 4.2 = 17.64 m^2
 /*
                   ^ y 
                   |
@@ -71,7 +73,7 @@ double disRatioZ = 0.2;
         |         |         |
         |         |         |
         |         |         |
-        |         | - - - - - - - - - - > x
+  - - - | - - - - | - - - - - - - - - - > x (map link)
         |         |         |
         |         |         |
         |         |         |
@@ -81,10 +83,11 @@ double disRatioZ = 0.2;
                   |
 其体素分布类似于occmap，是一个正方形区域，
 其中，正方形左下角为坐标原点，右上角为最大值terrainVoxelWidth
-terrainVoxelCloud是一个一维数组，存储了里面的所有数据，类似于occmap，按行(x)优先的顺序进行排列
+terrainVoxelCloud是一个一维数组，存储了里面的所有数据，类似于occmap，按列(y)优先的顺序进行排列
+四个角的一维索引分别为: 左下角 0 , 左上角 max_y, 右下角 (max_x - 1) * max_y 右上角 max_x * max_y
 */
 
-float terrainVoxelSize = 1.0;   // 地形体素尺寸大小，其实就是分辨率
+float terrainVoxelSize = 1.0;   // 地形体素尺寸大小，其实就是分辨率(固定值)
 int terrainVoxelShiftX = 0;
 int terrainVoxelShiftY = 0;
 const int terrainVoxelWidth = 21; // 地形体素总宽度
@@ -307,7 +310,7 @@ int main(int argc, char **argv) {
 
       // terrain voxel roll over
       // 当前地形体素的中心位置(int型，世界坐标系下)
-      // 在每次循环开始的时候terrainVoxelShiftX都代表上一次的体素中心坐标
+      // 在每次循环开始的时候terrainVoxelShiftX都代表上一次的体素中心坐标(也可以在一定程度上代表机器人在世界的像素坐标系下)
       float terrainVoxelCenX = terrainVoxelSize * terrainVoxelShiftX;
       float terrainVoxelCenY = terrainVoxelSize * terrainVoxelShiftY;
       // 下面做的内容都是滑动地图，类似于滑窗，使得整个terrainVoxelCloud都是以当前机器人位置为中心
@@ -318,11 +321,11 @@ int main(int argc, char **argv) {
           pcl::PointCloud<pcl::PointXYZI>::Ptr terrainVoxelCloudPtr =
               terrainVoxelCloud[terrainVoxelWidth * (terrainVoxelWidth - 1) +
                                 indY];
-          for (int indX = terrainVoxelWidth - 1; indX >= 1; indX--) {
+          for (int indX = terrainVoxelWidth - 1; indX >= 1; indX--) { // 将所有点云数据往左移动一列(即图示中x负方向)
             terrainVoxelCloud[terrainVoxelWidth * indX + indY] =
                 terrainVoxelCloud[terrainVoxelWidth * (indX - 1) + indY];
           }
-          terrainVoxelCloud[indY] = terrainVoxelCloudPtr;
+          terrainVoxelCloud[indY] = terrainVoxelCloudPtr; // 参考图示，最左边一列清空，等待该次循环新增的点云来填入
           terrainVoxelCloud[indY]->clear();
         }
         terrainVoxelShiftX--;
@@ -386,22 +389,23 @@ int main(int argc, char **argv) {
       // 将当前帧点云中的点加入到对应体素数组中，并更新对应体素中拥有的相应的点云数目
       for (int i = 0; i < laserCloudCropSize; i++) {
         point = laserCloudCrop->points[i];
-        // 计算当前点在地形体素中的索引
+        // 由于地形体素一直是以机器人的当前位姿为中心的，所以这里就是计算当前点在地形体素中的体素索引
+        // 这个体素(也可以说是像素，或者栅格)坐标系与世界坐标系的方向相同，但是原点其实是在左下角，方便转换为一维数组
         int indX = int((point.x - vehicleX + terrainVoxelSize / 2) /
                        terrainVoxelSize) +
                    terrainVoxelHalfWidth; // 加上半宽是因为体素数组在地图的左下角才是(0,0)
         int indY = int((point.y - vehicleY + terrainVoxelSize / 2) /
                        terrainVoxelSize) +
                    terrainVoxelHalfWidth;
-
+        // 补偿由于强制类型转换带来的舍入误差
         if (point.x - vehicleX + terrainVoxelSize / 2 < 0)
           indX--;
         if (point.y - vehicleY + terrainVoxelSize / 2 < 0)
           indY--;
-
+        // 将当前帧的点加入到对应的存储当前地形体素的一维数组中
         if (indX >= 0 && indX < terrainVoxelWidth && indY >= 0 &&
             indY < terrainVoxelWidth) { // 确保处理的点在附近地形体素范围内
-          terrainVoxelCloud[terrainVoxelWidth * indX + indY]->push_back(point);
+          terrainVoxelCloud[terrainVoxelWidth * indX + indY]->push_back(point); // 注意，这个一维数组是列主序
           terrainVoxelUpdateNum[terrainVoxelWidth * indX + indY]++;
         }
       }
