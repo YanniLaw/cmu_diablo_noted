@@ -6,16 +6,16 @@
     <param name="noDecayDis" value="1.75" />
     <param name="clearingDis" value="8.0" />
     <param name="useSorting" value="true" />
-    <param name="quantileZ" value="0.25" />
-    <param name="considerDrop" value="false" />
-    <param name="limitGroundLift" value="false" />
-    <param name="maxGroundLift" value="0.15" />
+    <param name="quantileZ" value="0.25" /> <!-- 量化因子，从排序后的高程值中提取一定比例的高度 -->
+    <param name="considerDrop" value="false" /> <!-- 其实就是是否考虑坑洞的情况 -->
+    <param name="limitGroundLift" value="false" /> <!-- 是否限制地面升降 -->
+    <param name="maxGroundLift" value="0.15" /> <!-- 地面升降最高的高度(跟上面的参数配合使用) -->
     <param name="clearDyObs" value="true" />
-    <param name="minDyObsDis" value="0.3" />
-    <param name="minDyObsAngle" value="0.0" />
-    <param name="minDyObsRelZ" value="-0.3" />
-    <param name="absDyObsRelZThre" value="0.2" />
-    <param name="minDyObsVFOV" value="-28.0" />
+    <param name="minDyObsDis" value="0.3" /> <!-- 清除动态障碍物的最小距离 -->
+    <param name="minDyObsAngle" value="0.0" /> <!-- 最小动态障碍物的正切角(不在车身系下) deg -->
+    <param name="minDyObsRelZ" value="-0.3" /> <!-- 最小动态障碍物的高度 -->
+    <param name="absDyObsRelZThre" value="0.2" /> <!-- 动态障碍物点在车身系下的高度阈值，我只考虑这么高的障碍物 -->
+    <param name="minDyObsVFOV" value="-28.0" /> <!-- 动态障碍物在车身坐标系下的FOV -->
     <param name="maxDyObsVFOV" value="33.0" />
     <param name="minDyObsPointNum" value="1" />
     <param name="noDataObstacle" value="false" />
@@ -24,8 +24,8 @@
     <param name="vehicleHeight" value="1.5" />
     <param name="voxelPointUpdateThre" value="100" />
     <param name="voxelTimeUpdateThre" value="2.0" />
-    <param name="minRelZ" value="-1.5" />
-    <param name="maxRelZ" value="0.3" />
+    <param name="minRelZ" value="-1.5" /> <!-- 這兩個參數的設置需要考慮車身的高度以及雷達的位置 -->
+    <param name="maxRelZ" value="0.3" /> <!--  这里是因为雷达到diablo架子的顶部大概有0.3m -->
     <param name="disRatioZ" value="0.2" />
   </node>
 
