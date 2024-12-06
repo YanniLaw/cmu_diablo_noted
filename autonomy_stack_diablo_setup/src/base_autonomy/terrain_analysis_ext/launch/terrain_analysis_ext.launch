@@ -12,14 +12,14 @@
     <param name="vehicleHeight" value="1.5" />
     <param name="voxelPointUpdateThre" value="100" />
     <param name="voxelTimeUpdateThre" value="2.0" />
-    <param name="lowerBoundZ" value="-2.5" />
+    <param name="lowerBoundZ" value="-2.5" /> <!-- 这里考虑的比局部地形范围还要更大一点 -->
     <param name="upperBoundZ" value="1.0" />
     <param name="disRatioZ" value="0.1" />
     <param name="checkTerrainConn" value="$(var checkTerrainConn)" />
-    <param name="terrainConnThre" value="0.5" />
+    <param name="terrainConnThre" value="0.5" /> <!-- 地形连接的距离阈值 -->
     <param name="terrainUnderVehicle" value="-0.75" />
-    <param name="ceilingFilteringThre" value="2.0" />
-    <param name="localTerrainMapRadius" value="4.0" />
+    <param name="ceilingFilteringThre" value="2.0" /> <!-- 过滤ceil的距离阈值 -->
+    <param name="localTerrainMapRadius" value="4.0" /> <!-- 局部地形地图的半径，与terrianAnalysis节点保持一致 -->
   </node>
 
 </launch>

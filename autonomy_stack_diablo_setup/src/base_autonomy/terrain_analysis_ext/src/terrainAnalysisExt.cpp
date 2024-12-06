@@ -49,24 +49,24 @@ double lowerBoundZ = -1.5;
 double upperBoundZ = 1.0;
 double disRatioZ = 0.1;
 bool checkTerrainConn = true;
-double terrainUnderVehicle = -0.75;
+double terrainUnderVehicle = -0.75; // 假设地面到机器人的距离
 double terrainConnThre = 0.5;
 double ceilingFilteringThre = 2.0;
 double localTerrainMapRadius = 4.0;
 
 // terrain voxel parameters
-float terrainVoxelSize = 2.0;
+float terrainVoxelSize = 2.0; // 地形体素的尺寸(分辨率)
 int terrainVoxelShiftX = 0;
 int terrainVoxelShiftY = 0;
 const int terrainVoxelWidth = 41;
 int terrainVoxelHalfWidth = (terrainVoxelWidth - 1) / 2;
-const int terrainVoxelNum = terrainVoxelWidth * terrainVoxelWidth;
+const int terrainVoxelNum = terrainVoxelWidth * terrainVoxelWidth; // 地形分析总的体素数目1681
 
 // planar voxel parameters
-float planarVoxelSize = 0.4;
+float planarVoxelSize = 0.4; // 平面体素尺寸
 const int planarVoxelWidth = 101;
 int planarVoxelHalfWidth = (planarVoxelWidth - 1) / 2;
-const int planarVoxelNum = planarVoxelWidth * planarVoxelWidth;
+const int planarVoxelNum = planarVoxelWidth * planarVoxelWidth; // 平面体素总数目 10201
 
 pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloud(new pcl::PointCloud<pcl::PointXYZI>());
 pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudCrop(new pcl::PointCloud<pcl::PointXYZI>());
@@ -95,7 +95,7 @@ float vehicleX = 0, vehicleY = 0, vehicleZ = 0;
 pcl::VoxelGrid<pcl::PointXYZI> downSizeFilter;
 pcl::KdTreeFLANN<pcl::PointXYZI> kdtree;
 
-// state estimation callback function
+// state estimation callback function 这块内容与地形分析一样
 void odometryHandler(const nav_msgs::msg::Odometry::ConstSharedPtr odom)
 {
   double roll, pitch, yaw;
@@ -249,7 +249,7 @@ int main(int argc, char** argv)
       // terrain voxel roll over
       float terrainVoxelCenX = terrainVoxelSize * terrainVoxelShiftX;
       float terrainVoxelCenY = terrainVoxelSize * terrainVoxelShiftY;
-
+      // 滑动窗口
       while (vehicleX - terrainVoxelCenX < -terrainVoxelSize)
       {
         for (int indY = 0; indY < terrainVoxelWidth; indY++)
@@ -321,6 +321,7 @@ int main(int argc, char** argv)
       }
 
       // stack registered laser scans
+      // 将当前帧裁剪后的点云数据加入到地形体素中
       pcl::PointXYZI point;
       int laserCloudCropSize = laserCloudCrop->points.size();
       for (int i = 0; i < laserCloudCropSize; i++)
@@ -341,7 +342,7 @@ int main(int argc, char** argv)
           terrainVoxelUpdateNum[terrainVoxelWidth * indX + indY]++;
         }
       }
-
+      // 更新地形体素点云数据
       for (int ind = 0; ind < terrainVoxelNum; ind++)
       {
         if (terrainVoxelUpdateNum[ind] >= voxelPointUpdateThre ||
@@ -373,6 +374,7 @@ int main(int argc, char** argv)
         }
       }
 
+      // 取机器人周围20个体素(也就是40m)的局部数据，因为X,Y索引是从左下角开始的，机器人始终处于该地形体素地图的中心
       terrainCloud->clear();
       for (int indX = terrainVoxelHalfWidth - 10; indX <= terrainVoxelHalfWidth + 10; indX++)
       {
@@ -389,7 +391,7 @@ int main(int argc, char** argv)
         planarVoxelConn[i] = 0;
         planarPointElev[i].clear();
       }
-
+      // 计算平面体素planarPointElev高程数组
       int terrainCloudSize = terrainCloud->points.size();
       for (int i = 0; i < terrainCloudSize; i++)
       {
@@ -466,6 +468,7 @@ int main(int argc, char** argv)
       // check terrain connectivity to remove ceiling
       if (checkTerrainConn)
       {
+        // 地形中心的index，也就是机器人在planar voxel中的索引
         int ind = planarVoxelWidth * planarVoxelHalfWidth + planarVoxelHalfWidth;
         if (planarPointElev[ind].size() == 0)
           planarVoxelElev[ind] = vehicleZ + terrainUnderVehicle;
@@ -505,12 +508,14 @@ int main(int argc, char** argv)
       }
 
       // compute terrain map beyond localTerrainMapRadius
+      // 计算超过局部地形地图半径之外的地形图
       terrainCloudElev->clear();
       int terrainCloudElevSize = 0;
-      for (int i = 0; i < terrainCloudSize; i++)
+      for (int i = 0; i < terrainCloudSize; i++) // 遍历附近20m所有点云数据
       {
         point = terrainCloud->points[i];
         float dis = sqrt((point.x - vehicleX) * (point.x - vehicleX) + (point.y - vehicleY) * (point.y - vehicleY));
+        // 不将附近5m的局部地形地图加进来
         if (point.z - vehicleZ > lowerBoundZ - disRatioZ * dis && point.z - vehicleZ < upperBoundZ + disRatioZ * dis && dis > localTerrainMapRadius)
         {
           int indX = int((point.x - vehicleX + planarVoxelSize / 2) / planarVoxelSize) + planarVoxelHalfWidth;
@@ -531,7 +536,7 @@ int main(int argc, char** argv)
               terrainCloudElev->points[terrainCloudElevSize].x = point.x;
               terrainCloudElev->points[terrainCloudElevSize].y = point.y;
               terrainCloudElev->points[terrainCloudElevSize].z = point.z;
-              terrainCloudElev->points[terrainCloudElevSize].intensity = disZ;
+              terrainCloudElev->points[terrainCloudElevSize].intensity = disZ; // 高程差绝对值！！！
 
               terrainCloudElevSize++;
             }
@@ -544,7 +549,7 @@ int main(int argc, char** argv)
       for (int i = 0; i < terrainCloudLocalSize; i++) {
         point = terrainCloudLocal->points[i];
         float dis = sqrt((point.x - vehicleX) * (point.x - vehicleX) + (point.y - vehicleY) * (point.y - vehicleY));
-        if (dis <= localTerrainMapRadius)
+        if (dis <= localTerrainMapRadius) // 超过了局部范围也不加入到这里
         {
           terrainCloudElev->push_back(point);
         }
