@@ -78,7 +78,7 @@ double minPathRange = 1.0;
 double pathRangeStep = 0.5;
 bool pathRangeBySpeed = true;
 bool pathCropByGoal = true;
-bool autonomyMode = false;
+bool autonomyMode = false; // 有三种模式: 1. 完全手动 2. 智能joy 3. 完全自主
 double autonomySpeed = 1.0;
 double joyToSpeedDelay = 2.0;
 double joyToCheckObstacleDelay = 5.0;
@@ -635,18 +635,18 @@ int main(int argc, char** argv)
     else if (joySpeed > 1.0) joySpeed = 1.0;
   }
 
-  for (int i = 0; i < laserCloudStackNum; i++) {
+  for (int i = 0; i < laserCloudStackNum; i++) { // 1
     laserCloudStack[i].reset(new pcl::PointCloud<pcl::PointXYZI>());
   }
-  for (int i = 0; i < groupNum; i++) {
+  for (int i = 0; i < groupNum; i++) { // 7
     startPaths[i].reset(new pcl::PointCloud<pcl::PointXYZ>());
   }
   #if PLOTPATHSET == 1
-  for (int i = 0; i < pathNum; i++) {
+  for (int i = 0; i < pathNum; i++) { // 343
     paths[i].reset(new pcl::PointCloud<pcl::PointXYZI>());
   }
   #endif
-  for (int i = 0; i < gridVoxelNum; i++) {
+  for (int i = 0; i < gridVoxelNum; i++) { // 72611
     correspondences[i].resize(0);
   }
 

@@ -18,8 +18,8 @@
     <param name="sensorOffsetX" value="$(var sensorOffsetX)" />
     <param name="sensorOffsetY" value="$(var sensorOffsetY)" />
     <param name="twoWayDrive" value="$(var twoWayDrive)" />
-    <param name="laserVoxelSize" value="0.05" />
-    <param name="terrainVoxelSize" value="0.2" />
+    <param name="laserVoxelSize" value="0.05" /> <!-- 激光雷达下采样尺寸 -->
+    <param name="terrainVoxelSize" value="0.2" /> <!-- 地形地图下采样尺寸 -->
     <param name="useTerrainAnalysis" value="true" />
     <param name="checkObstacle" value="true" />
     <param name="checkRotObstacle" value="false" />
@@ -44,7 +44,7 @@
     <param name="pathRangeStep" value="0.5" />
     <param name="pathRangeBySpeed" value="true" />
     <param name="pathCropByGoal" value="true" />
-    <param name="autonomyMode" value="$(var autonomyMode)" />
+    <param name="autonomyMode" value="$(var autonomyMode)" /> <!-- True表示完全自主导航模式 -->
     <param name="autonomySpeed" value="$(var autonomySpeed)" />
     <param name="joyToSpeedDelay" value="$(var joyToSpeedDelay)" />
     <param name="joyToCheckObstacleDelay" value="5.0" />
