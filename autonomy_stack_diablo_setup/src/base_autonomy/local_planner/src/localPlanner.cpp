@@ -95,8 +95,9 @@ float joySpeed = 0;
 float joySpeedRaw = 0;
 float joyDir = 0;
 
-const int pathNum = 343;
-const int groupNum = 7;
+// 这里的参数与生成path的脚本设置一致
+const int pathNum = 343; // 生成343条路径
+const int groupNum = 7; // 一共有7个group
 float gridVoxelSize = 0.02;
 float searchRadius = 0.45;
 float gridVoxelOffsetX = 3.2;
@@ -129,7 +130,7 @@ float pathPenaltyList[36 * pathNum] = {0};
 float clearPathPerGroupScore[36 * groupNum] = {0};
 int clearPathPerGroupNum[36 * groupNum] = {0};
 float pathPenaltyPerGroupScore[36 * groupNum] = {0};
-std::vector<int> correspondences[gridVoxelNum];
+std::vector<int> correspondences[gridVoxelNum]; // 数组，元素为std::vector<int>
 
 bool newLaserCloud = false;
 bool newTerrainCloud = false;
@@ -160,7 +161,7 @@ void odometryHandler(const nav_msgs::msg::Odometry::ConstSharedPtr odom)
 
 void laserCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr laserCloud2)
 {
-  if (!useTerrainAnalysis) {
+  if (!useTerrainAnalysis) { // 只有在不采用地形分析数据的情况下，才对接收的当前帧位姿进行处理
     laserCloud->clear();
     pcl::fromROSMsg(*laserCloud2, *laserCloud);
 
@@ -193,7 +194,7 @@ void laserCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr laser
 
 void terrainCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr terrainCloud2)
 {
-  if (useTerrainAnalysis) {
+  if (useTerrainAnalysis) { // 采用地形分析数据
     terrainCloud->clear();
     pcl::fromROSMsg(*terrainCloud2, *terrainCloud);
 
@@ -206,13 +207,13 @@ void terrainCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr ter
       float pointX = point.x;
       float pointY = point.y;
       float pointZ = point.z;
-
+      // 从地形分析数据中挑出距离一定范围内 且 高程大于设定阈值的点
       float dis = sqrt((pointX - vehicleX) * (pointX - vehicleX) + (pointY - vehicleY) * (pointY - vehicleY));
       if (dis < adjacentRange && (point.intensity > obstacleHeightThre || (point.intensity > groundHeightThre && useCost))) {
         point.x = pointX;
         point.y = pointY;
         point.z = pointZ;
-        terrainCloudCrop->push_back(point);
+        terrainCloudCrop->push_back(point); // 此时，坐标系还是map系
       }
     }
 
@@ -224,6 +225,12 @@ void terrainCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr ter
   }
 }
 
+/* joystick 格式介绍
+# Reports the state of a joysticks axes and buttons.
+Header header           # timestamp in the header is the time the data is received from the joystick
+float32[] axes          # the axes measurements from a joystick
+int32[] buttons         # the buttons measurements from a joystick 
+*/
 void joystickHandler(const sensor_msgs::msg::Joy::ConstSharedPtr joy)
 {
   joyTime = nh->now().seconds();
@@ -269,6 +276,7 @@ void speedHandler(const std_msgs::msg::Float32::ConstSharedPtr speed)
   }
 }
 
+// 这里的点是位于map系下的
 void boundaryHandler(const geometry_msgs::msg::PolygonStamped::ConstSharedPtr boundary)
 {
   boundaryCloud->clear();
@@ -298,7 +306,7 @@ void boundaryHandler(const geometry_msgs::msg::PolygonStamped::ConstSharedPtr bo
         point.x = float(pointID) / float(pointNum) * point1.x + (1.0 - float(pointID) / float(pointNum)) * point2.x;
         point.y = float(pointID) / float(pointNum) * point1.y + (1.0 - float(pointID) / float(pointNum)) * point2.y;
         point.z = 0;
-        point.intensity = 100.0;
+        point.intensity = 100.0; // 加个很大很大的高程值
 
         for (int j = 0; j < pointPerPathThre; j++) {
           boundaryCloud->push_back(point);
@@ -418,7 +426,7 @@ void readPaths()
 
     if (pathID >= 0 && pathID < pathNum) {
       pointSkipCount++;
-      if (pointSkipCount > pointSkipNum) {
+      if (pointSkipCount > pointSkipNum) { // 相当于做了个降采样
         paths[pathID]->push_back(point);
         pointSkipCount = 0;
       }
@@ -460,7 +468,7 @@ void readPathList()
 
     if (pathID >= 0 && pathID < pathNum && groupID >= 0 && groupID < groupNum) {
       pathList[pathID] = groupID;
-      endDirPathList[pathID] = 2.0 * atan2(endY, endX) * 180 / PI;
+      endDirPathList[pathID] = 2.0 * atan2(endY, endX) * 180 / PI; // ???
     }
   }
 
@@ -646,7 +654,7 @@ int main(int argc, char** argv)
     paths[i].reset(new pcl::PointCloud<pcl::PointXYZI>());
   }
   #endif
-  for (int i = 0; i < gridVoxelNum; i++) { // 72611
+  for (int i = 0; i < gridVoxelNum; i++) { // 72611 = 161 * 451
     correspondences[i].resize(0);
   }
 
@@ -667,8 +675,8 @@ int main(int argc, char** argv)
   while (status) {
     rclcpp::spin_some(nh);
 
-    if (newLaserCloud || newTerrainCloud) {
-      if (newLaserCloud) {
+    if (newLaserCloud || newTerrainCloud) { // 对单帧激光雷达 以及 地形分析的使用是互斥的
+      if (newLaserCloud) { // 使用单帧激光雷达的情况
         newLaserCloud = false;
 
         laserCloudStack[laserCloudCount]->clear();
@@ -681,7 +689,7 @@ int main(int argc, char** argv)
         }
       }
 
-      if (newTerrainCloud) {
+      if (newTerrainCloud) { // 使用地形元素的情况
         newTerrainCloud = false;
 
         plannerCloud->clear();
@@ -695,6 +703,7 @@ int main(int argc, char** argv)
       plannerCloudCrop->clear();
       int plannerCloudSize = plannerCloud->points.size();
       for (int i = 0; i < plannerCloudSize; i++) {
+        // 转为机器人坐标系下的点坐标
         float pointX1 = plannerCloud->points[i].x - vehicleX;
         float pointY1 = plannerCloud->points[i].y - vehicleY;
         float pointZ1 = plannerCloud->points[i].z - vehicleZ;
@@ -703,13 +712,13 @@ int main(int argc, char** argv)
         point.y = -pointX1 * sinVehicleYaw + pointY1 * cosVehicleYaw;
         point.z = pointZ1;
         point.intensity = plannerCloud->points[i].intensity;
-
+        // 转换到机器人坐标系下后再进行裁剪过滤(如果不是地形分析的数据，那么还要对高度值进行过滤)
         float dis = sqrt(point.x * point.x + point.y * point.y);
         if (dis < adjacentRange && ((point.z > minRelZ && point.z < maxRelZ) || useTerrainAnalysis)) {
           plannerCloudCrop->push_back(point);
         }
       }
-
+      // 将边界点转换到机器人坐标系下并进行裁剪过滤
       int boundaryCloudSize = boundaryCloud->points.size();
       for (int i = 0; i < boundaryCloudSize; i++) {
         point.x = ((boundaryCloud->points[i].x - vehicleX) * cosVehicleYaw 
@@ -724,7 +733,7 @@ int main(int argc, char** argv)
           plannerCloudCrop->push_back(point);
         }
       }
-
+      // 将手动添加的障碍物信息转换到机器人坐标系下并进行裁剪过滤
       int addedObstaclesSize = addedObstacles->points.size();
       for (int i = 0; i < addedObstaclesSize; i++) {
         point.x = ((addedObstacles->points[i].x - vehicleX) * cosVehicleYaw 
@@ -741,22 +750,23 @@ int main(int argc, char** argv)
       }
 
       float pathRange = adjacentRange;
-      if (pathRangeBySpeed) pathRange = adjacentRange * joySpeed;
+      if (pathRangeBySpeed) pathRange = adjacentRange * joySpeed; // 根据速度大小自动确定路径的范围
       if (pathRange < minPathRange) pathRange = minPathRange;
       float relativeGoalDis = adjacentRange;
 
       if (autonomyMode) {
+        // 计算给定way point距离当前机器人的距离以及角度(都转换到了机器人坐标系下)
         float relativeGoalX = ((goalX - vehicleX) * cosVehicleYaw + (goalY - vehicleY) * sinVehicleYaw);
         float relativeGoalY = (-(goalX - vehicleX) * sinVehicleYaw + (goalY - vehicleY) * cosVehicleYaw);
 
         relativeGoalDis = sqrt(relativeGoalX * relativeGoalX + relativeGoalY * relativeGoalY);
         joyDir = atan2(relativeGoalY, relativeGoalX) * 180 / PI;
-        
+        // 对角度超过阈值 且 距离在盲区以内进行处理
         if (fabs(joyDir) > freezeAng && relativeGoalDis < goalBehindRange) {
           relativeGoalDis = 0;
           joyDir = 0;
         }
-        
+        // 这里是给一个机制让上层去调整way point的取值
         if (fabs(joyDir) > freezeAng && freezeStatus == 0) {
           freezeStartTime = odomTime;
           freezeStatus = 1;

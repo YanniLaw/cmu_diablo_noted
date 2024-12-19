@@ -12,25 +12,25 @@
   <arg name="goalY" default="0.0"/>
 
   <node pkg="local_planner" exec="localPlanner" name="localPlanner" output="screen">
-    <param name="pathFolder" value="$(find-pkg-share local_planner)/paths" />
+    <param name="pathFolder" value="$(find-pkg-share local_planner)/paths" /> <!-- 离线路径存放的文件夹 -->
     <param name="vehicleLength" value="0.6" />
     <param name="vehicleWidth" value="0.6" />
     <param name="sensorOffsetX" value="$(var sensorOffsetX)" />
     <param name="sensorOffsetY" value="$(var sensorOffsetY)" />
-    <param name="twoWayDrive" value="$(var twoWayDrive)" />
+    <param name="twoWayDrive" value="$(var twoWayDrive)" /> <!-- 双向驱动？可以前进也可以后退 -->
     <param name="laserVoxelSize" value="0.05" /> <!-- 激光雷达下采样尺寸 -->
     <param name="terrainVoxelSize" value="0.2" /> <!-- 地形地图下采样尺寸 -->
-    <param name="useTerrainAnalysis" value="true" />
+    <param name="useTerrainAnalysis" value="true" /> <!-- 是否使用地形分析数据，这个与接收实时激光雷达数据是互斥的 -->
     <param name="checkObstacle" value="true" />
     <param name="checkRotObstacle" value="false" />
-    <param name="adjacentRange" value="3.5" />
-    <param name="obstacleHeightThre" value="0.15" />
-    <param name="groundHeightThre" value="0.05" />
+    <param name="adjacentRange" value="3.5" /> <!-- 不使用地形分析时激光雷达数据裁剪范围 -->
+    <param name="obstacleHeightThre" value="0.15" /> <!-- 障碍物高度阈值 -->
+    <param name="groundHeightThre" value="0.05" /> <!-- 地面高度阈值 -->
     <param name="costHeightThre1" value="0.1" />
     <param name="costHeightThre2" value="0.05" />
-    <param name="useCost" value="false" />
+    <param name="useCost" value="false" /> <!-- 搭配groundHeightThre参数一起使用 -->
     <param name="pointPerPathThre" value="2" />
-    <param name="minRelZ" value="-0.4" />
+    <param name="minRelZ" value="-0.4" /> <!-- 机器人坐标系下点云高度值阈值 -->
     <param name="maxRelZ" value="0.3" />
     <param name="maxSpeed" value="$(var maxSpeed)" />
     <param name="dirWeight" value="0.02" />
@@ -40,7 +40,7 @@
     <param name="minPathScale" value="0.75" />
     <param name="pathScaleStep" value="0.25" />
     <param name="pathScaleBySpeed" value="true" />
-    <param name="minPathRange" value="1.0" />
+    <param name="minPathRange" value="1.0" /> <!-- 最小路径范围 -->
     <param name="pathRangeStep" value="0.5" />
     <param name="pathRangeBySpeed" value="true" />
     <param name="pathCropByGoal" value="true" />
