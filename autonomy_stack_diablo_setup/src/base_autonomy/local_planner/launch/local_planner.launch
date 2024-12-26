@@ -13,44 +13,44 @@
 
   <node pkg="local_planner" exec="localPlanner" name="localPlanner" output="screen">
     <param name="pathFolder" value="$(find-pkg-share local_planner)/paths" /> <!-- 离线路径存放的文件夹 -->
-    <param name="vehicleLength" value="0.6" />
+    <param name="vehicleLength" value="0.6" /> <!-- 车辆的尺寸 长 宽 -->
     <param name="vehicleWidth" value="0.6" />
-    <param name="sensorOffsetX" value="$(var sensorOffsetX)" />
+    <param name="sensorOffsetX" value="$(var sensorOffsetX)" />   <!-- 传感器与车体中心的偏移量 -->
     <param name="sensorOffsetY" value="$(var sensorOffsetY)" />
-    <param name="twoWayDrive" value="$(var twoWayDrive)" /> <!-- 双向驱动？可以前进也可以后退 -->
-    <param name="laserVoxelSize" value="0.05" /> <!-- 激光雷达下采样尺寸 -->
-    <param name="terrainVoxelSize" value="0.2" /> <!-- 地形地图下采样尺寸 -->
-    <param name="useTerrainAnalysis" value="true" /> <!-- 是否使用地形分析数据，这个与接收实时激光雷达数据是互斥的 -->
+    <param name="twoWayDrive" value="$(var twoWayDrive)" />       <!-- 双向驱动？可以前进也可以后退 -->
+    <param name="laserVoxelSize" value="0.05" />      <!-- 激光雷达下采样尺寸 -->
+    <param name="terrainVoxelSize" value="0.2" />     <!-- 地形地图下采样尺寸 -->
+    <param name="useTerrainAnalysis" value="true" />  <!-- 是否使用地形分析数据，这个与接收实时激光雷达数据是互斥的 -->
     <param name="checkObstacle" value="true" />
     <param name="checkRotObstacle" value="false" />
-    <param name="adjacentRange" value="3.5" /> <!-- 不使用地形分析时激光雷达数据裁剪范围 -->
-    <param name="obstacleHeightThre" value="0.15" /> <!-- 障碍物高度阈值 -->
-    <param name="groundHeightThre" value="0.05" /> <!-- 地面高度阈值 -->
+    <param name="adjacentRange" value="3.5" />        <!-- 不使用地形分析时激光雷达数据裁剪范围 -->
+    <param name="obstacleHeightThre" value="0.15" />  <!-- 障碍物高度阈值 -->
+    <param name="groundHeightThre" value="0.05" />    <!-- 地面高度阈值 -->
     <param name="costHeightThre1" value="0.1" />
     <param name="costHeightThre2" value="0.05" />
-    <param name="useCost" value="false" /> <!-- 搭配groundHeightThre参数一起使用 -->
+    <param name="useCost" value="false" />              <!-- 搭配groundHeightThre参数一起使用 -->
     <param name="pointPerPathThre" value="2" />
-    <param name="minRelZ" value="-0.4" /> <!-- 机器人坐标系下点云高度值阈值 -->
+    <param name="minRelZ" value="-0.4" />               <!-- 机器人坐标系下点云高度值裁剪阈值 -->
     <param name="maxRelZ" value="0.3" />
     <param name="maxSpeed" value="$(var maxSpeed)" />
-    <param name="dirWeight" value="0.02" />
-    <param name="dirThre" value="90.0" />
-    <param name="dirToVehicle" value="false" />
-    <param name="pathScale" value="1.0" />
-    <param name="minPathScale" value="0.75" />
+    <param name="dirWeight" value="0.02" />         <!-- 计算得分时转向角度的权重 -->
+    <param name="dirThre" value="90.0" />           <!-- 车辆最大转向角度 -->
+    <param name="dirToVehicle" value="false" />     <!-- 是否以车辆的朝向来计算被遮挡的路径，否则以目标点方向来计算 -->
+    <param name="pathScale" value="1.0" />          <!-- 路径尺度 -->
+    <param name="minPathScale" value="0.75" />      <!-- 最小路径尺度 -->
     <param name="pathScaleStep" value="0.25" />
-    <param name="pathScaleBySpeed" value="true" />
-    <param name="minPathRange" value="1.0" /> <!-- 最小路径范围 -->
+    <param name="pathScaleBySpeed" value="true" />  <!-- 路径尺度随着速度变化 -->
+    <param name="minPathRange" value="1.0" />       <!-- 最小路径范围 -->
     <param name="pathRangeStep" value="0.5" />
-    <param name="pathRangeBySpeed" value="true" />
-    <param name="pathCropByGoal" value="true" />
-    <param name="autonomyMode" value="$(var autonomyMode)" /> <!-- True表示完全自主导航模式 -->
-    <param name="autonomySpeed" value="$(var autonomySpeed)" />
+    <param name="pathRangeBySpeed" value="true" />  <!-- 路径范围是否随速度变化 -->
+    <param name="pathCropByGoal" value="true" />    <!-- 是否根据目标点来裁剪路径，也就是说，目标点1m远，不考虑1m以后得路径了就 -->
+    <param name="autonomyMode" value="$(var autonomyMode)" />         <!-- True表示完全自主导航模式 -->
+    <param name="autonomySpeed" value="$(var autonomySpeed)" />       <!-- 自主导航模式下的速度 -->
     <param name="joyToSpeedDelay" value="$(var joyToSpeedDelay)" />
     <param name="joyToCheckObstacleDelay" value="5.0" />
-    <param name="goalClearRange" value="0.4" />
+    <param name="goalClearRange" value="0.4" />     <!-- pathCropByGoal参数为true时生效，大于目标点这么远的路径就不考虑了 -->
     <param name="goalBehindRange" value="0.8" />
-    <param name="freezeAng" value="90.0" />
+    <param name="freezeAng" value="90.0" />         <!-- 完全自主模式下目标点在机器人当前朝向的角度阈值 -->
     <param name="freezeTime" value="2.0" />
     <param name="goalX" value="$(var goalX)" />
     <param name="goalY" value="$(var goalY)" />
