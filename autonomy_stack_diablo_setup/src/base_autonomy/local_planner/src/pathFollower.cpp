@@ -96,8 +96,8 @@ float vehicleRollRec = 0;
 float vehiclePitchRec = 0;
 float vehicleYawRec = 0;
 
-float vehicleYawRate = 0;
-float vehicleSpeed = 0;
+float vehicleYawRate = 0; // 最终的角速度 wz
+float vehicleSpeed = 0;   // 最终的线速度 vx
 
 double odomTime = 0;
 double joyTime = 0;
@@ -111,8 +111,8 @@ int vehicleReady = -1;
 float bodyHeight = 1.0;
 float bodyPitch = 0;
 
-float bodyLow = 0.28;
-float bodyHigh = 0.52;
+float bodyLow = 0.28;       // 身体最低高度
+float bodyHigh = 0.52;      // 身体最高高度
 float bodySpeedGain = 0.5;
 float bodyMaxSpeed = 0.2;
 
@@ -135,8 +135,8 @@ void odomHandler(const nav_msgs::msg::Odometry::ConstSharedPtr odomIn)
   vehicleX = odomIn->pose.pose.position.x - cos(yaw) * sensorOffsetX + sin(yaw) * sensorOffsetY;
   vehicleY = odomIn->pose.pose.position.y - sin(yaw) * sensorOffsetX - cos(yaw) * sensorOffsetY;
   vehicleZ = odomIn->pose.pose.position.z;
-
-  if ((fabs(roll) > inclThre * PI / 180.0 || fabs(pitch) > inclThre * PI / 180.0) && useInclToStop) {
+  // 利用倾斜角度 以及 角速度 触发停止或者 减速的逻辑 
+  if ((fabs(roll) > inclThre * PI / 180.0 || fabs(pitch) > inclThre * PI / 180.0) && useInclToStop) { // incline
     stopInitTime = rclcpp::Time(odomIn->header.stamp).seconds();
   }
 
@@ -154,7 +154,7 @@ void pathHandler(const nav_msgs::msg::Path::ConstSharedPtr pathIn)
     path.poses[i].pose.position.y = pathIn->poses[i].pose.position.y;
     path.poses[i].pose.position.z = pathIn->poses[i].pose.position.z;
   }
-
+  // 利用当前里程计数据来更新一些变量，相当于做了个缓存
   vehicleXRec = vehicleX;
   vehicleYRec = vehicleY;
   vehicleZRec = vehicleZ;
@@ -172,11 +172,11 @@ void joystickHandler(const sensor_msgs::msg::Joy::ConstSharedPtr joy)
   joySpeedRaw = sqrt(joy->axes[3] * joy->axes[3] + joy->axes[4] * joy->axes[4]);
   joySpeed = joySpeedRaw;
   if (joySpeed > 1.0) joySpeed = 1.0;
-  if (joy->axes[4] == 0) joySpeed = 0;
-  joyYaw = joy->axes[3];
+  if (joy->axes[4] == 0) joySpeed = 0; // 无线速度输入
+  joyYaw = joy->axes[3]; // 角速度
   if (joySpeed == 0 && noRotAtStop) joyYaw = 0;
 
-  if (joy->axes[4] < 0 && !twoWayDrive) {
+  if (joy->axes[4] < 0 && !twoWayDrive) { // 摇杆向后运动但是不允许前后运动
     joySpeed = 0;
     joyYaw = 0;
   }
@@ -184,15 +184,15 @@ void joystickHandler(const sensor_msgs::msg::Joy::ConstSharedPtr joy)
   joyManualFwd = joy->axes[4];
   joyManualYaw = joy->axes[3];
 
-  if (joy->axes[2] > -0.1) {
+  if (joy->axes[2] > -0.1) { // LT松开(默认)
     autonomyMode = false;
-  } else {
+  } else { // L0T按下
     autonomyMode = true;
   }
 
-  if (joy->axes[5] > -0.1) {
+  if (joy->axes[5] > -0.1) { // RT松开(默认)
     manualMode = false;
-  } else {
+  } else { // RT按下
     manualMode = true;
   }
 }
@@ -220,14 +220,19 @@ void slowDownHandler(const std_msgs::msg::Int8::ConstSharedPtr slow)
 
 void robotStatusHandler(const motion_msgs::msg::RobotStatus::ConstSharedPtr status)
 {
+  // 2: 匍匐状态 3: 站立状态 4: 站立-->匍匐  5: 匍匐-->站立
   if (status->robot_mode_msg == 3) vehicleReady = 1;
   else vehicleReady = 0;
 
   //printf ("Ctrl mode %d, Robot mode %d\n", status->ctrl_mode_msg, status->robot_mode_msg);
 }
 
+/* bodyHeight 是一个归一化的高度比例，通常在 [0, 1] 范围内
+    0：表示身体处于最低位置（bodyLow） 1：表示身体处于最高位置（bodyHigh） 介于 0 和 1 之间：表示身体在最低和最高之间的某个高度
+*/
 void motorStatusHandler(const motion_msgs::msg::LegMotors::ConstSharedPtr status)
 {
+  // left_leg_length / right_leg_length : 左右腿的当前长度 
   bodyHeight = (status->left_leg_length + status->right_leg_length - bodyLow) / (bodyHigh - bodyLow);
 }
 
@@ -358,7 +363,8 @@ int main(int argc, char** argv)
   while (status) {
     rclcpp::spin_some(nh);
 
-    if (pathInit) {
+    if (pathInit) { // 收到了路径信息再进行处理
+      // 当前帧位置转换到上一帧的坐标系下(也可以说是这两帧的位置差)
       float vehicleXRel = cos(vehicleYawRec) * (vehicleX - vehicleXRec) 
                         + sin(vehicleYawRec) * (vehicleY - vehicleYRec);
       float vehicleYRel = -sin(vehicleYawRec) * (vehicleX - vehicleXRec) 
@@ -368,7 +374,7 @@ int main(int argc, char** argv)
       float endDisX = path.poses[pathSize - 1].pose.position.x - vehicleXRel;
       float endDisY = path.poses[pathSize - 1].pose.position.y - vehicleYRel;
       float endDis = sqrt(endDisX * endDisX + endDisY * endDisY);
-
+      // 循环遍历所有路径点，挑选出第一个大于前瞻距离的路径点
       float disX, disY, dis;
       while (pathPointID < pathSize - 1) {
         disX = path.poses[pathPointID].pose.position.x - vehicleXRel;
@@ -385,17 +391,17 @@ int main(int argc, char** argv)
       disY = path.poses[pathPointID].pose.position.y - vehicleYRel;
       dis = sqrt(disX * disX + disY * disY);
       float pathDir = atan2(disY, disX);
-
+      // 计算方向偏差 并将角度规范化 [-pi, pi]
       float dirDiff = vehicleYaw - vehicleYawRec - pathDir;
       if (dirDiff > PI) dirDiff -= 2 * PI;
       else if (dirDiff < -PI) dirDiff += 2 * PI;
       if (dirDiff > PI) dirDiff -= 2 * PI;
       else if (dirDiff < -PI) dirDiff += 2 * PI;
 
-      if (twoWayDrive) {
+      if (twoWayDrive) { // 根据方向偏差 (dirDiff) 和当前的行驶方向 (navFwd) 自动切换车辆的前进或后退模式
         double time = nh->now().seconds();
         if (fabs(dirDiff) > PI / 2 && navFwd && time - switchTime > switchTimeThre) {
-          navFwd = false;
+          navFwd = false; // 前后运动切换的标志
           switchTime = time;
         } else if (fabs(dirDiff) < PI / 2 && !navFwd && time - switchTime > switchTimeThre) {
           navFwd = true;
@@ -404,34 +410,34 @@ int main(int argc, char** argv)
       }
 
       float joySpeed2 = maxSpeed * joySpeed;
-      if (!navFwd) {
+      if (!navFwd) { // 向后运动
         dirDiff += PI;
         if (dirDiff > PI) dirDiff -= 2 * PI;
         joySpeed2 *= -1;
       }
-
+      // 计算车辆的角速度 当速度较小时，使用较大的偏差增益进行快速调整；当速度较大时，使用较小的增益避免过大的方向修正
       if (fabs(vehicleSpeed) < 2.0 * maxAccel / 100.0) vehicleYawRate = -stopYawRateGain * dirDiff;
       else vehicleYawRate = -yawRateGain * dirDiff;
 
       if (vehicleYawRate > maxYawRate * PI / 180.0) vehicleYawRate = maxYawRate * PI / 180.0;
       else if (vehicleYawRate < -maxYawRate * PI / 180.0) vehicleYawRate = -maxYawRate * PI / 180.0;
 
-      if (joySpeed2 == 0 && !autonomyMode) {
+      if (joySpeed2 == 0 && !autonomyMode) { // 没有线速度 而且 不处于完全自主运动模式
         vehicleYawRate = maxYawRate * joyYaw * PI / 180.0;
-      } else if (pathSize <= 1 || (dis < stopDisThre && noRotAtGoal)) {
+      } else if (pathSize <= 1 || (dis < stopDisThre && noRotAtGoal)) { // 局部路径太短， 或者 前瞻点距离太近 且 不在目标点转动(这种应该是快到goal了)
         vehicleYawRate = 0;
       }
 
-      if (pathSize <= 1) {
+      if (pathSize <= 1) { // 规划出的路径很短 甚至没有
         joySpeed2 = 0;
-      } else if (endDis / slowDwnDisThre < joySpeed) {
+      } else if (endDis / slowDwnDisThre < joySpeed) { // 到路径终点的距离比较近
         joySpeed2 *= endDis / slowDwnDisThre;
       }
-
+      // 减速逻辑
       float joySpeed3 = joySpeed2;
       if (odomTime < slowInitTime + slowTime1 && slowInitTime > 0 || slowDown == 1) joySpeed3 *= slowRate1;
       else if (odomTime < slowInitTime + slowTime1 + slowTime2 && slowInitTime > 0 || slowDown == 2) joySpeed3 *= slowRate2;
-
+      // 根据偏差和距离动态调整车辆速度
       if (fabs(dirDiff) < dirDiffThre && dis > stopDisThre) {
         if (vehicleSpeed < joySpeed3) vehicleSpeed += maxAccel / 100.0;
         else if (vehicleSpeed > joySpeed3) vehicleSpeed -= maxAccel / 100.0;
@@ -439,12 +445,12 @@ int main(int argc, char** argv)
         if (vehicleSpeed > 0) vehicleSpeed -= maxAccel / 100.0;
         else if (vehicleSpeed < 0) vehicleSpeed += maxAccel / 100.0;
       }
-
+      // 停车逻辑
       if (odomTime < stopInitTime + stopTime && stopInitTime > 0) {
         vehicleSpeed = 0;
         vehicleYawRate = 0;
       }
-
+      // 安全停车
       if (safetyStop >= 1) vehicleSpeed = 0;
       if (safetyStop >= 2) vehicleYawRate = 0;
 
@@ -455,12 +461,12 @@ int main(int argc, char** argv)
         else cmd_vel.twist.linear.x = vehicleSpeed;
         cmd_vel.twist.angular.z = vehicleYawRate;
         
-        if (manualMode) {
+        if (manualMode) { // RT按下，手动模式
           cmd_vel.twist.linear.x = maxSpeed * joyManualFwd;
           cmd_vel.twist.angular.z = maxYawRate * PI / 180.0 * joyManualYaw;
         }
         
-        pubSpeed->publish(cmd_vel);
+        pubSpeed->publish(cmd_vel); // 发布给simulator
 
         if (vehicleReady != 0) {
           ctrl_msg.value.forward = cmd_vel.twist.linear.x;
@@ -473,9 +479,10 @@ int main(int argc, char** argv)
           ctrl_msg.value.up = bodySpeedGain * (desiredHeight - bodyHeight);
           if (ctrl_msg.value.up < -bodyMaxSpeed) ctrl_msg.value.up = -bodyMaxSpeed;
           else if (ctrl_msg.value.up > bodyMaxSpeed) ctrl_msg.value.up = bodyMaxSpeed;
-
+          // 输入一个与当前pitch角度相反(并加倍)的角速度值，以保持机器人俯仰角稳定
+          // 这里的输入主要有两个，一个是该节点，另外一个是diablo control节点
           ctrl_msg.value.pitch = -pitchRateGain * bodyPitch;
-          if (ctrl_msg.value.pitch < -pitchMaxRate) ctrl_msg.value.pitch = -pitchMaxRate;
+          if (ctrl_msg.value.pitch < -pitchMaxRate) ctrl_msg.value.pitch = -pitchMaxRate; // 最大值进行限制
           else if (ctrl_msg.value.pitch > pitchMaxRate) ctrl_msg.value.pitch = pitchMaxRate;
         } else {
           ctrl_msg.value.forward = 0;
@@ -489,7 +496,7 @@ int main(int argc, char** argv)
 
         ctrl_msg.mode_mark = false;
         if (ctrlInitFrameCount > 0) {
-          ctrl_msg.mode_mark = true;
+          ctrl_msg.mode_mark = true; // 初始时设置模式
           ctrlInitFrameCount--;
         }
 

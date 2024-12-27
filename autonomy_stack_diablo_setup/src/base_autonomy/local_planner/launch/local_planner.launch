@@ -61,27 +61,27 @@
     <param name="sensorOffsetY" value="$(var sensorOffsetY)" />
     <param name="pubSkipNum" value="1" />
     <param name="twoWayDrive" value="$(var twoWayDrive)" />
-    <param name="lookAheadDis" value="0.5" />
-    <param name="yawRateGain" value="1.5" />
+    <param name="lookAheadDis" value="0.5" />     <!-- 前瞻点距离 -->
+    <param name="yawRateGain" value="1.5" />      <!-- 一些增益 -->
     <param name="stopYawRateGain" value="3.0" />
-    <param name="maxYawRate" value="80.0" />
-    <param name="maxSpeed" value="$(var maxSpeed)" />
-    <param name="maxAccel" value="1.5" />
-    <param name="switchTimeThre" value="1.0" />
-    <param name="dirDiffThre" value="0.15" />
-    <param name="stopDisThre" value="0.3" />
-    <param name="slowDwnDisThre" value="1.0" />
-    <param name="useInclRateToSlow" value="false" />
-    <param name="inclRateThre" value="120.0" />
-    <param name="slowRate1" value="0.25" />
-    <param name="slowRate2" value="0.5" />
-    <param name="slowTime1" value="2.0" />
-    <param name="slowTime2" value="2.0" />
-    <param name="useInclToStop" value="false" />
-    <param name="inclThre" value="45.0" />
-    <param name="stopTime" value="5.0" />
-    <param name="noRotAtStop" value="false" />
-    <param name="noRotAtGoal" value="true" />
+    <param name="maxYawRate" value="80.0" />          <!-- 最大角速度 -->
+    <param name="maxSpeed" value="$(var maxSpeed)" /> <!-- 最大速度 -->
+    <param name="maxAccel" value="1.5" />             <!-- 最大加速度 -->
+    <param name="switchTimeThre" value="1.0" />       <!-- 前后运动切换阈值 -->
+    <param name="dirDiffThre" value="0.15" />         <!-- 方向差阈值 -->
+    <param name="stopDisThre" value="0.3" />          <!-- 停止距离阈值 -->
+    <param name="slowDwnDisThre" value="1.0" />       <!-- 减速距离阈值 -->
+    <param name="useInclRateToSlow" value="false" />  <!-- 是否根据倾斜角速度来触发停止逻辑 -->
+    <param name="inclRateThre" value="120.0" />       <!-- 角速度阈值 deg -->
+    <param name="slowRate1" value="0.25" />           <!-- 一级减速率 -->
+    <param name="slowRate2" value="0.5" />            <!-- 二级减速率 -->
+    <param name="slowTime1" value="2.0" />            <!-- 一级减速时间 -->
+    <param name="slowTime2" value="2.0" />            <!-- 二级减速时间 -->
+    <param name="useInclToStop" value="false" />  <!-- 是否根据倾斜角度来触发停止逻辑 -->
+    <param name="inclThre" value="45.0" />        <!-- 角度阈值 deg -->
+    <param name="stopTime" value="5.0" />         <!-- 停止时间 -->
+    <param name="noRotAtStop" value="false" />    <!-- 停止时不旋转 -->
+    <param name="noRotAtGoal" value="true" />     <!-- 到达目标点不旋转 -->
     <param name="autonomyMode" value="$(var autonomyMode)" />
     <param name="autonomySpeed" value="$(var autonomySpeed)" />
     <param name="joyToSpeedDelay" value="$(var joyToSpeedDelay)" />
