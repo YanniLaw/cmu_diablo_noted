@@ -7,14 +7,14 @@
     <param name="trajFile" value="$(find-pkg-prefix vehicle_simulator)/log/trajectory" />
     <param name="pcdFile" value="$(find-pkg-prefix vehicle_simulator)/log/pointcloud" />
     <param name="mapFile" value="$(find-pkg-prefix vehicle_simulator)/mesh/$(var world_name)/map.ply" />
-    <param name="overallMapVoxelSize" value="0.1" />
-    <param name="exploredAreaVoxelSize" value="0.2" />
-    <param name="exploredVolumeVoxelSize" value="1.0" />
+    <param name="overallMapVoxelSize" value="0.1" />          <!-- 保存的地图分辨率 -->
+    <param name="exploredAreaVoxelSize" value="0.2" />        <!-- 已搜索区域分辨率 -->
+    <param name="exploredVolumeVoxelSize" value="1.0" />      <!-- 已搜索体积分辨率 -->
     <param name="transInterval" value="0.1" />
     <param name="yawInterval" value="0.17" />
-    <param name="overallMapDisplayInterval" value="2" />
-    <param name="exploredAreaDisplayInterval" value="1" />
-    <param name="savePcd" value="false" />
+    <param name="overallMapDisplayInterval" value="2" />      <!-- 地图展示时间间隔 -->
+    <param name="exploredAreaDisplayInterval" value="1" />    <!--已搜索区域展示时间间隔 -->
+    <param name="savePcd" value="false" />                    <!-- 是否保存地图 -->
   </node>
 
   <!--node pkg="visualization_tools" exec="realTimePlot.py" name="realTimePlot" output="screen"/-->

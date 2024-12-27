@@ -105,7 +105,7 @@ void odometryHandler(const nav_msgs::msg::Odometry::ConstSharedPtr odom)
   float dz = odom->pose.pose.position.z - vehicleZ;
   float dis = sqrt(dx * dx + dy * dy + dz * dz);
 
-  if (!systemDelayInited) {
+  if (!systemDelayInited) { // 延迟初始化，累积到一定数量的雷达帧在进行下一步
     vehicleYaw = yaw;
     vehicleX = odom->pose.pose.position.x;
     vehicleY = odom->pose.pose.position.y;
@@ -120,27 +120,27 @@ void odometryHandler(const nav_msgs::msg::Odometry::ConstSharedPtr odom)
     timeDurationMsg.data = timeDuration;
     pubTimeDurationPtr->publish(timeDurationMsg);
   }
-
+  // 有一定的距离变化才进入这里的初始化环节
   if (dis < transInterval && dYaw < yawInterval) {
     return;
   }
-
+  // 系统初始化
   if (!systemInited) {
     dis = 0;
     systemInitTime = systemTime;
     systemInited = true;
   }
 
-  travelingDis += dis;
+  travelingDis += dis; // 机器人行驶总路程
 
   vehicleYaw = yaw;
   vehicleX = odom->pose.pose.position.x;
   vehicleY = odom->pose.pose.position.y;
   vehicleZ = odom->pose.pose.position.z;
-
+  // 保存轨迹 (应该加上一定的距离或者角度间隔)
   fprintf(trajFilePtr, "%f %f %f %f %f %f %f\n", vehicleX, vehicleY, vehicleZ, roll, pitch, yaw, timeDuration);
   fflush(trajFilePtr);
-
+  // 发布轨迹
   pcl::PointXYZI point;
   point.x = vehicleX;
   point.y = vehicleY;
@@ -163,7 +163,7 @@ void laserCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr laser
       systemDelayInited = true;
     }
   }
-
+  // 先延迟初始化-->系统初始化
   if (!systemInited) {
     return;
   }
@@ -171,7 +171,7 @@ void laserCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr laser
   laserCloud->clear();
   pcl::fromROSMsg(*laserCloudIn, *laserCloud);
 
-  if (savePcd) {
+  if (savePcd) { // 直接累积每一帧????
     float timeDuration2 = rclcpp::Time(laserCloudIn->header.stamp).seconds() - systemInitTime;
     int laserCloudSize = laserCloud->points.size();
     for (int i = 0; i < laserCloudSize; i++) {
@@ -179,7 +179,7 @@ void laserCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr laser
     }
   }
   fflush(pcdFilePtr);
-
+  // 将当前帧点云数据(map系下)加入exploredVolumeCloud中
   *exploredVolumeCloud += *laserCloud;
 
   exploredVolumeCloud2->clear();
@@ -189,12 +189,12 @@ void laserCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr laser
   pcl::PointCloud<pcl::PointXYZI>::Ptr tempCloud = exploredVolumeCloud;
   exploredVolumeCloud = exploredVolumeCloud2;
   exploredVolumeCloud2 = tempCloud;
-
+  // 这个参数没看懂？？？如果说是求探索的体积的话，不应该算地图对应的长宽高吗？
   exploredVolume = exploredVolumeVoxelSize * exploredVolumeVoxelSize * 
                    exploredVolumeVoxelSize * exploredVolumeCloud->points.size();
-
+  // 将当前帧点云数据加入到exploredAreaCloud中
   *exploredAreaCloud += *laserCloud;
-
+  // 每10s 就发布一次已经搜索到的点云数据
   exploredAreaDisplayCount++;
   if (exploredAreaDisplayCount >= 10 * exploredAreaDisplayInterval) {
     exploredAreaCloud2->clear();
@@ -291,7 +291,7 @@ int main(int argc, char** argv)
   exploredVolumeDwzFilter.setLeafSize(exploredVolumeVoxelSize, exploredVolumeVoxelSize, exploredVolumeVoxelSize);
 
   pcl::PLYReader ply_reader;
-  if (ply_reader.read(mapFile, *overallMapCloud) == -1) {
+  if (ply_reader.read(mapFile, *overallMapCloud) == -1) { // 应该先检测是不是存在这个文件
     RCLCPP_INFO(nh->get_logger(), "Couldn't read pointcloud.ply file.");
   }
 
@@ -319,6 +319,7 @@ int main(int argc, char** argv)
   bool status = rclcpp::ok();
   while (status) {
     rclcpp::spin_some(nh);
+    // 每隔一段时间发布一次地图(SLAM模块也会发布地图数据，会冲突！！！)
     overallMapDisplayCount++;
     if (overallMapDisplayCount >= 100 * overallMapDisplayInterval) {
       if (overallMapCloudDwzSize > 0) {
