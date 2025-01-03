@@ -40,16 +40,16 @@
     <param name="minPathScale" value="0.75" />      <!-- 最小路径尺度 -->
     <param name="pathScaleStep" value="0.25" />
     <param name="pathScaleBySpeed" value="true" />  <!-- 路径尺度随着速度变化 -->
-    <param name="minPathRange" value="1.0" />       <!-- 最小路径范围 -->
+    <param name="minPathRange" value="1.0" />       <!-- 最小路径范围，也就是考虑障碍物的最小距离 -->
     <param name="pathRangeStep" value="0.5" />
     <param name="pathRangeBySpeed" value="true" />  <!-- 路径范围是否随速度变化 -->
-    <param name="pathCropByGoal" value="true" />    <!-- 是否根据目标点来裁剪路径，也就是说，目标点1m远，不考虑1m以后得路径了就 -->
+    <param name="pathCropByGoal" value="true" />    <!-- 是否根据目标点来裁剪路径，也就是说，目标点1m远，不考虑1m以后得障碍了就 -->
     <param name="autonomyMode" value="$(var autonomyMode)" />         <!-- True表示完全自主导航模式 -->
     <param name="autonomySpeed" value="$(var autonomySpeed)" />       <!-- 自主导航模式下的速度 -->
     <param name="joyToSpeedDelay" value="$(var joyToSpeedDelay)" />
     <param name="joyToCheckObstacleDelay" value="5.0" />
     <param name="goalClearRange" value="0.4" />     <!-- pathCropByGoal参数为true时生效，大于目标点这么远的路径就不考虑了 -->
-    <param name="goalBehindRange" value="0.8" />
+    <param name="goalBehindRange" value="0.8" />    <!-- 目标点的盲区范围，这个范围内的目标点不进行处理 -->
     <param name="freezeAng" value="90.0" />         <!-- 完全自主模式下目标点在机器人当前朝向的角度阈值 -->
     <param name="freezeTime" value="2.0" />
     <param name="goalX" value="$(var goalX)" />

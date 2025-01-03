@@ -55,7 +55,7 @@ double terrainVoxelSize = 0.2;
 bool useTerrainAnalysis = false;
 bool checkObstacle = true;
 bool checkRotObstacle = false;
-double adjacentRange = 3.5;
+double adjacentRange = 3.5; // adjacentRange是机器人做碰撞检测的最大范围(并不是最终的范围)，在这个范围内的点都会首先被加入到碰撞检测的点云内，但是这并不是最终碰撞检测的范围，最终检测的范围是和速度相关的，小于这个值的
 double obstacleHeightThre = 0.2;
 double groundHeightThre = 0.1;
 double costHeightThre1 = 0.15;
@@ -69,10 +69,10 @@ double maxRelZ = 0.25;
 double maxSpeed = 1.0;
 double dirWeight = 0.02;
 double dirThre = 90.0;
-bool dirToVehicle = false;
-double pathScale = 1.0;
-double minPathScale = 0.75;
-double pathScaleStep = 0.25;
+bool dirToVehicle = false; // 这个参数是为一些类似汽车的机器人平台设置的，这些平台不能原地转向而只能一边向前或者向后运动一边转向
+double pathScale = 1.0; // 用来控制碰撞检测范围，pathscale 越小，碰撞检测范围就越小
+double minPathScale = 0.75; // 最小需要考虑的碰撞检测尺度
+double pathScaleStep = 0.25; // 在当前的碰撞检测范围内找不到无碰撞路径的时候缩短 pathscale 的步长
 bool pathScaleBySpeed = true;
 double minPathRange = 1.0;
 double pathRangeStep = 0.5;
@@ -85,7 +85,7 @@ double joyToCheckObstacleDelay = 5.0;
 double freezeAng = 90.0;
 double freezeTime = 2.0;
 double freezeStartTime = 0;
-int freezeStatus = 0;
+int freezeStatus = 0; // 冻结状态 0:正常 1:开始冻结  2: 冻结超过一定时长 正常流程是 0->1->2->0 
 double goalClearRange = 0.5;
 double goalBehindRange = 0.8;
 double goalX = 0;
@@ -230,7 +230,8 @@ void terrainCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr ter
 Header header           # timestamp in the header is the time the data is received from the joystick
 float32[] axes          # size (8) the axes measurements from a joystick [-1.0, 1.0]
 int32[] buttons         # size (11) the buttons measurements from a joystick  0:no press 1: press
-当在rviz上点击一个goal point的时候，会发送一个/joy话题出来，其中joy->axes[4]为1.0
+注意: 当在rviz上点击一个goal point的时候，会发送一个/joy话题出来，其中joy->axes[4]为1.0 表示skidjoy 的速度
+      joy->axes[2]为-1.0, 开启自主模式autonomyMode = true; joy->axes[5]为1.0， 开启障碍物检查
 */
 void joystickHandler(const sensor_msgs::msg::Joy::ConstSharedPtr joy)
 {
@@ -249,7 +250,7 @@ void joystickHandler(const sensor_msgs::msg::Joy::ConstSharedPtr joy)
 
   if (joy->axes[2] > -0.1) { // 松开LT键(默认)
     autonomyMode = false;
-  } else { // 按下LT键
+  } else { // 按下LT键 (导航时默认是这个选项)
     autonomyMode = true;
   }
 
@@ -758,19 +759,20 @@ int main(int argc, char** argv)
       if (pathRange < minPathRange) pathRange = minPathRange;
       float relativeGoalDis = adjacentRange;
 
-      if (autonomyMode) { // 如果是完全自主模式 //TODO: 什么时候是完全自主模式？？？ 
+      if (autonomyMode) { // 如果是完全自主模式 (也就是导航系统发出way point的时候，以及在rviz上点击way point)
         // 计算给定way point距离当前机器人的距离以及角度(都转换到了机器人坐标系下)
         float relativeGoalX = ((goalX - vehicleX) * cosVehicleYaw + (goalY - vehicleY) * sinVehicleYaw);
         float relativeGoalY = (-(goalX - vehicleX) * sinVehicleYaw + (goalY - vehicleY) * cosVehicleYaw);
 
         relativeGoalDis = sqrt(relativeGoalX * relativeGoalX + relativeGoalY * relativeGoalY);
         joyDir = atan2(relativeGoalY, relativeGoalX) * 180 / PI; // [-180, 180]
-        // 对目标点距离在盲区以内 但是 角度超过阈值 进行处理
+        // 对距离在盲区以内而且角度超过阈值得目标点进行处理
         if (fabs(joyDir) > freezeAng && relativeGoalDis < goalBehindRange) {
           relativeGoalDis = 0;
           joyDir = 0;
         }
-        // 这里是给一个机制让上层去调整way point的取值
+        // 如果目标点不在盲区以内(也就是正常目标点)但是，却超过了角度的阈值的目标点进行处理
+        // 这里应该是给一个机制让上层去调整way point的取值
         if (fabs(joyDir) > freezeAng && freezeStatus == 0) {
           freezeStartTime = odomTime;
           freezeStatus = 1;
@@ -779,7 +781,7 @@ int main(int argc, char** argv)
         } else if (fabs(joyDir) <= freezeAng && freezeStatus == 2) {
           freezeStatus = 0;
         }
-        // 对于非双向驱动的方式，限制其way point的方向
+        // 对于非双向驱动的方式，限制最大way point的方向
         if (!twoWayDrive) {
           if (joyDir > 95.0) joyDir = 95.0;
           else if (joyDir < -95.0) joyDir = -95.0;
@@ -794,10 +796,12 @@ int main(int argc, char** argv)
       }
 
       bool pathFound = false;
+      // defPathScale 是最大的需要考虑的碰撞检测的范围尺度，这个值是初始化时就已经设置好的，是定值。
+      // 如果最后没找到路径，就会一步一步的缩短 pathscale，也就是缩短碰撞检测的范围，直到找到路径或者缩短到 minpathscale
       float defPathScale = pathScale;
       if (pathScaleBySpeed) pathScale = defPathScale * joySpeed;
       if (pathScale < minPathScale) pathScale = minPathScale;
-
+      // 做碰撞检测的时候，如果某条路上任意一点有碰撞，那这一整条路都会认为是有碰撞的!!!
       while (pathScale >= minPathScale && pathRange >= minPathRange) {
         for (int i = 0; i < 36 * pathNum; i++) {
           clearPathList[i] = 0;
@@ -808,26 +812,28 @@ int main(int argc, char** argv)
           clearPathPerGroupNum[i] = 0;
           pathPenaltyPerGroupScore[i] = 0;
         }
-
+        // 这两个参数是当车不是圆形的时候做碰撞检测使用的中间参数
         float minObsAngCW = -180.0;
         float minObsAngCCW = 180.0;
         // 机器人中心到其中一个顶点的距离(此处是假设机器人为矩形)以及角度
         float diameter = sqrt(vehicleLength / 2.0 * vehicleLength / 2.0 + vehicleWidth / 2.0 * vehicleWidth / 2.0);
         float angOffset = atan2(vehicleWidth, vehicleLength) * 180.0 / PI;
         int plannerCloudCropSize = plannerCloudCrop->points.size(); // 在这里所有点都已经转换到了机器人坐标系下
+        // 根据地形图中的每个地形点，去检测所有方向的轨迹(不满足要求的会跳过)
         for (int i = 0; i < plannerCloudCropSize; i++) {
           float x = plannerCloudCrop->points[i].x / pathScale;
           float y = plannerCloudCrop->points[i].y / pathScale;
           float h = plannerCloudCrop->points[i].intensity;
           float dis = sqrt(x * x + y * y);
 
-          // 1. 如果当前点 距离机器人pathRange之内，2. 当前点在相对目标点的波动范围内 或者 不使用goal来裁剪路径  3. 检查障碍物标志位为true
+          // 1. 如果当前地形点 距离机器人pathRange之内，2. 当前地形点在相对目标距离的波动范围内 或者 不使用goal来裁剪路径  3. 检查障碍物标志位为true
+          // 注意relativeGoalDis这个参数，当不是自主导航模式的时候，他就等于adjacentRange(3.5m);当处于自主导航模式下，他的值就等于计算出来的目标点的相对距离(尽管这个距离可能非常远)
           if (dis < pathRange / pathScale && (dis <= (relativeGoalDis + goalClearRange) / pathScale || !pathCropByGoal) && checkObstacle) {
             // 将360度十等分，相当于把每条路径*10，投影一圈，其实就是不止考虑当前点对当前车辆朝向的影响，还会考虑该点对车辆转向的影响
             for (int rotDir = 0; rotDir < 36; rotDir++) {
               float rotAng = (10.0 * rotDir - 180.0) * PI / 180; // [-pi, pi]
               float angDiff = fabs(joyDir - (10.0 * rotDir - 180.0)); // [0, 360]
-              if (angDiff > 180.0) { // angDiff 表示目标点方向与当前选定投影方向的角度差
+              if (angDiff > 180.0) { // angDiff 是目标点方向与待检测的轨迹方向的差值
                 angDiff = 360.0 - angDiff; // [0, 180]
               }
               /* 有下面几种情况就不对该点进行处理了
@@ -836,18 +842,28 @@ int main(int argc, char** argv)
                 3. 如果采用当前车辆朝向来计算周围路径，且 当目标点方向绝对值大于90度(往后走) 且选定投影角度大于车辆最大转角(往后走时角度的说法跟往前不一样，所以这里的两个条件也不一样)
               */
               // dirToVehicle = false，就以目标点的方向计算附近方向的路径，可能是不考虑车辆的转弯半径的约束，可以直接转向目标点前进。
+              // 应用在大多数可以差速驱动的机器人平台上，只考虑目标方向附近的轨迹，机器人可以任意无碰撞的转向需要的方向
               // 而dirToVehicle = true，则以当前车辆朝向的方向计算附近方向的路径，意思是目标点只是确定了前向还是后向，车辆带有转弯半径的约束，其可转向角度依然是在当前朝向的附近
+              // 应用在类似汽车的平台上，这时候只考虑机器人朝向dirThr之内的轨迹，因为机器人只能向前或者向后运动的时候转向，dirThr之外的轨迹机器人是没有能力实现的
+              // 一般dirToVehicle是true的时候，dirThr会设置的比较小，比如只考虑机器人朝前或者朝后10°的范围内的轨迹
+
+              // 分三种情况，来去掉不满足要求的待检测路径
+              // 第一种是应用在差速机器人上，只考虑目标方向附近的轨迹，
+              // 第二种及第三种是应用在阿克曼转向的机器人上，分别对应向前及向后运动的情况，只考虑向前及向后小范围内的轨迹
+              // 1. 目标点方向与待检测的轨迹方向的差值太大(只考虑目标点方向附近的轨迹时)，这条轨迹就不考虑了；
+              // 2. 目标点在机器人前方，轨迹方向偏差机器人正前方太多，这条轨迹就不考虑了
+              // 3. 目标点在机器人后方，轨迹方向偏差机器人正后方太多，这条轨迹就不考虑了
               if ((angDiff > dirThre && !dirToVehicle) || (fabs(10.0 * rotDir - 180.0) > dirThre && fabs(joyDir) <= 90.0 && dirToVehicle) ||
                   ((10.0 * rotDir > dirThre && 360.0 - 10.0 * rotDir > dirThre) && fabs(joyDir) > 90.0 && dirToVehicle)) {
                 continue;
               }
-              // 将点转换至不同的方向
+              // 将该地形点转换至rotAng方向的坐标系下(左乘进行坐标转换)，P_rot = R_rot_base * P_base，获取该地形点在旋转的坐标系下的坐标值
               float x2 = cos(rotAng) * x + sin(rotAng) * y;
               float y2 = -sin(rotAng) * x + cos(rotAng) * y;
 
               float scaleY = x2 / gridVoxelOffsetX + searchRadius / gridVoxelOffsetY 
                              * (gridVoxelOffsetX - x2) / gridVoxelOffsetX;
-
+              // 获取该地形点在旋转后的坐标系下的索引
               int indX = int((gridVoxelOffsetX + gridVoxelSize / 2 - x2) / gridVoxelSize);
               int indY = int((gridVoxelOffsetY + gridVoxelSize / 2 - y2 / scaleY) / gridVoxelSize);
               if (indX >= 0 && indX < gridVoxelNumX && indY >= 0 && indY < gridVoxelNumY) {
@@ -855,9 +871,10 @@ int main(int argc, char** argv)
                 int blockedPathByVoxelNum = correspondences[ind].size(); // correspondences[ind] 是经过该体素的路径的ID集合
                 for (int j = 0; j < blockedPathByVoxelNum; j++) {
                   // 如果高程值大于障碍物高度  或者 不使用地形分析
+                  // 如果某条路上任意一点有碰撞，那这一整条路都会认为是有碰撞的,加入到clearPathList列表中，后续就不考虑这些点了
                   if (h > obstacleHeightThre || !useTerrainAnalysis) {
                     clearPathList[pathNum * rotDir + correspondences[ind][j]]++;
-                  } else { // 其他情况加上高程值
+                  } else { // 如果该地形点高程值大于地面高度，那么就将高程值写入惩罚列表里面(如果一条路径有多个地形点满足该情况，这个惩罚列表保存的是最大的那个)
                     if (pathPenaltyList[pathNum * rotDir + correspondences[ind][j]] < h && h > groundHeightThre) {
                       pathPenaltyList[pathNum * rotDir + correspondences[ind][j]] = h;
                     }
@@ -866,16 +883,19 @@ int main(int argc, char** argv)
               }
             }
           }
-          // 对于差速底盘的处理，此时障碍物可能在侧面，转动的时候可能会碰撞到障碍物
+          // 对于差速底盘(非圆形)的处理，此时障碍物可能在侧面，转动的时候可能会碰撞到障碍物
           // 1. 点在顶点的半径以内 但是又不在车身以内; 2. 使用地形分析时高程值大于障碍物的高度阈值 或者 不使用地形分析; 3. 检查旋转的障碍物???
+          // minObsAngCW = -180.0;minObsAngCCW = 180.0;
+          // 这两个变量其实就是计算机器人在该障碍物地形点的情况下顺时针/逆时针最大能转多少度(保留了旋转的符号，所以逆时针取最大值，顺时针取最小值)
           if (dis < diameter / pathScale && (fabs(x) > vehicleLength / pathScale / 2.0 || fabs(y) > vehicleWidth / pathScale / 2.0) && 
               (h > obstacleHeightThre || !useTerrainAnalysis) && checkRotObstacle) {
             float angObs = atan2(y, x) * 180.0 / PI; // 计算原点到(x,y)的方位角 [-180, 180]
             if (angObs > 0) { // 方位角大于0度，其实就是在x正方向左边，y坐标值大于0
+              // angObs - angOffset 其实就是该点的方向跟车辆左前方角点方向差，也就是机器人逆时针能转动的角度
               if (minObsAngCCW > angObs - angOffset) minObsAngCCW = angObs - angOffset;
               if (minObsAngCW < angObs + angOffset - 180.0) minObsAngCW = angObs + angOffset - 180.0;
             } else { // 方位角小于等于0度，其实就是在x正方向右边，y坐标小于等于0
-              if (minObsAngCW < angObs + angOffset) minObsAngCW = angObs + angOffset;
+              if (minObsAngCW < angObs + angOffset) minObsAngCW = angObs + angOffset; // angObs + angOffset 其实就是该点的方向跟车辆右前方角点方向差
               if (minObsAngCCW > 180.0 + angObs - angOffset) minObsAngCCW = 180.0 + angObs - angOffset;
             }
           }
@@ -883,9 +903,9 @@ int main(int argc, char** argv)
 
         if (minObsAngCW > 0) minObsAngCW = 0; // [0, -180]
         if (minObsAngCCW < 0) minObsAngCCW = 0; // [0, 180]
-
+        // 遍历所有方向的轨迹(不满足要求的会跳过)，并进行打分(这里的打分只针对路径组Group)
         for (int i = 0; i < 36 * pathNum; i++) {
-          int rotDir = int(i / pathNum); // [0, 35]
+          int rotDir = int(i / pathNum); // [0, 35] 从-180度开始，到+180度结束
           float angDiff = fabs(joyDir - (10.0 * rotDir - 180.0));
           if (angDiff > 180.0) {
             angDiff = 360.0 - angDiff;
@@ -904,24 +924,43 @@ int main(int argc, char** argv)
             if (dirDiff > 180.0) {
               dirDiff = 360.0 - dirDiff;
             }
-
-            float rotDirW; // 旋转方向权重 另一种说法  rotDirW代表了该条路径的方向与y轴负方向的角度差？？？
+            /*
+            权重跟路径的变化可以这样表示，可以看出，路径越靠近车辆前后方 其实权重越大
+                           x
+                  (+0deg) ^ (-0deg)
+                        9 | 9    
+                      8   |     8
+                 5        |        5
+              3           |           3
+(90deg) 1 <------------------------------ 1 (-90deg)
+              3           |           3
+                  5       |        5  
+                      8   |     8 
+                        9 | 10
+                (+180deg) | (180deg)
+             */
+            // 这里的rotDirW，可以看做是跟路径方向相关的权重值，越靠近机器人的正前方/正后方 权重值越大，越靠近机器人的左/右方，权重值越小
+            float rotDirW; // 旋转方向权重 
+            // 分两种情况讨论
+            // 情况1 此时路径方向可以看成都在车身的右方(也就是旋转的角度都是顺时针转，从-180-->0)，这个时候 权重值的变化为 10 --> 1 --> 9
             if (rotDir < 18) rotDirW = fabs(fabs(rotDir - 9) + 1); // [1, 10]
+            // 情况2 此时路径方向可以看成都在车身的左方(也就是旋转的角度都是逆时针转，从0-->180)，这个时候 权重值的变化为 10 --> 1 --> 9
             else rotDirW = fabs(fabs(rotDir - 27) + 1); // [1, 10]
             float score = (1 - sqrt(sqrt(dirWeight * dirDiff))) * rotDirW * rotDirW * rotDirW * rotDirW;
             if (score > 0) {
+              // 因为是对路径组进行打分，而不是对单独每条轨迹，所以对打分的结果都是叠加起来的(一个路径组有很多条轨迹，而这个循环是遍历每条轨迹，而且是各个方向的轨迹)
               clearPathPerGroupScore[groupNum * rotDir + pathList[i % pathNum]] += score; // pathList[i % pathNum] 是343条路径中其中一条所在的groupID
               clearPathPerGroupNum[groupNum * rotDir + pathList[i % pathNum]]++;
               pathPenaltyPerGroupScore[groupNum * rotDir + pathList[i % pathNum]] += pathPenaltyList[i];
             }
           }
         }
-
+        // 最优路径组选取，其实是在36*7=252条路径group里面选择最优的一条(7条初始路径经过了360度旋转)
         float maxScore = 0;
         int selectedGroupID = -1;
         for (int i = 0; i < 36 * groupNum; i++) {
           int rotDir = int(i / groupNum); // [0, 35]
-          float rotAng = (10.0 * rotDir - 180.0) * PI / 180;
+          float rotAng = (10.0 * rotDir - 180.0) * PI / 180; // [-pi, pi]
           float rotDeg = 10.0 * rotDir;
           if (rotDeg > 180.0) rotDeg -= 360.0;
           if (maxScore < clearPathPerGroupScore[i] && ((rotAng * 180.0 / PI > minObsAngCW && rotAng * 180.0 / PI < minObsAngCCW) || 
@@ -930,7 +969,7 @@ int main(int argc, char** argv)
             selectedGroupID = i; // 选取最优路径组(此时i是7的倍数，因为还带了旋转角度的信息！)
           }
         }
-
+        // 根据惩罚得分来判定是否进行减速
         float penaltyScore = 0;
         if (selectedGroupID >= 0) {
           if (clearPathPerGroupNum[selectedGroupID] > 0) {
@@ -956,7 +995,7 @@ int main(int argc, char** argv)
             float dis = sqrt(x * x + y * y);
 
             if (dis <= pathRange / pathScale && dis <= relativeGoalDis / pathScale) {
-              path.poses[i].pose.position.x = pathScale * (cos(rotAng) * x - sin(rotAng) * y);
+              path.poses[i].pose.position.x = pathScale * (cos(rotAng) * x - sin(rotAng) * y); // 路径点要转到目标角度上去
               path.poses[i].pose.position.y = pathScale * (sin(rotAng) * x + cos(rotAng) * y);
               path.poses[i].pose.position.z = pathScale * z; // 恢复尺度
             } else {
@@ -986,7 +1025,7 @@ int main(int argc, char** argv)
                 (rotDeg > minObsAngCW && rotDeg < minObsAngCCW && twoWayDrive) || !checkRotObstacle)) {
               continue;
             }
-
+            // 此时表示路径没有被遮挡
             if (clearPathList[i] < pointPerPathThre) {
               int freePathLength = paths[i % pathNum]->points.size();
               for (int j = 0; j < freePathLength; j++) {
@@ -1031,7 +1070,7 @@ int main(int argc, char** argv)
       }
       pathScale = defPathScale;
 
-      if (!pathFound) { // 没有找到路径也要发布
+      if (!pathFound) { // 如果最后迭代完了都还没有找到最优路径也要发布空的出去
         path.poses.resize(1);
         path.poses[0].pose.position.x = 0;
         path.poses[0].pose.position.y = 0;

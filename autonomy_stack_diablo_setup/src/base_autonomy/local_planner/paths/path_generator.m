@@ -71,6 +71,9 @@ for shift1 = -angle : deltaAngle : angle % 最外层循环每次循环存储一�
     pathStartAll = [pathStartAll, pathStart]; % 将当前的pathStart 追加到pathStartAll 中（动态数组扩展,水平拼接）
     % 由于初始path一共有七个组，所以最终有4行707列
     
+    % 关于scale 这个值是控制路径组的弯曲角度的。正常来说，当机器人越靠近障碍物，避障时的转弯幅度就越大，这就需要距离机器人越近的路径组弯曲角度越大，这样机器人靠近障碍物时能够及时的避障。
+    % 而距离机器人较远的路径组，避障的距离足够长，转弯幅度就可以小一些，所以乘一个小于1的系数调节后面两次样条曲线的弯曲角度
+
     % 随着路径的变长，角度分辨率减小，这样能将路径集中在前方，比较密集，朝前走
     for shift2 = -angle * scale + shift1 : deltaAngle * scale : angle * scale + shift1
         for shift3 = -angle * scale^2 + shift2 : deltaAngle * scale^2 : angle * scale^2 + shift2
