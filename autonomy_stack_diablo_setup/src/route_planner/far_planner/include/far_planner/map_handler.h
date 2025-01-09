@@ -10,14 +10,14 @@ enum CloudType {
 
 struct MapHandlerParams {
     MapHandlerParams() = default;
-    float sensor_range;
-    float floor_height;
-    float cell_length;
-    float cell_height;
-    float grid_max_length;
-    float grid_max_height;
+    float sensor_range;         // 传感器测量范围
+    float floor_height;         // 楼层高度???
+    float cell_length;          // 每个格子的长度 m
+    float cell_height;          // 每个格子的高度 m
+    float grid_max_length;      // 地图网格最大长度 m
+    float grid_max_height;      // 地图网格最大高度 m
     // local terrain height map
-    float height_voxel_dim;
+    float height_voxel_dim;     // 
 };
 
 class MapHandler {
@@ -132,7 +132,7 @@ public:
 private:
     MapHandlerParams map_params_;
     int neighbor_Lnum_, neighbor_Hnum_;
-    Eigen::Vector3i robot_cell_sub_;
+    Eigen::Vector3i robot_cell_sub_; // 机器人位置对应的网格索引
     int INFLATE_N;
     bool is_init_ = false;
     PointCloudPtr flat_terrain_cloud_;

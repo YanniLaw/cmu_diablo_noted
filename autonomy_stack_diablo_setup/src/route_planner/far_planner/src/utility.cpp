@@ -202,6 +202,7 @@ geometry_msgs::msg::Point FARUtil::Point3DToGeoMsgPoint(const Point3D& point) {
   return p;
 }
 
+// 利用点云自定义的高程值来进行free和obs点云区分
 void FARUtil::ExtractFreeAndObsCloud(const PointCloudPtr& newCloudIn,
                                     const PointCloudPtr& freeCloudOut,
                                     const PointCloudPtr& obsCloudOut) 
@@ -709,6 +710,7 @@ void FARUtil::ConvertCTNodeStackToPCL(const CTNodeStack& ctnode_stack,
   }
 }
 
+// 实现基于包围盒的点云裁剪
 void FARUtil::CropBoxCloud(const PointCloudPtr& cloudInOut, 
                           const Point3D& center_p, 
                           const Point3D& crop_size) 

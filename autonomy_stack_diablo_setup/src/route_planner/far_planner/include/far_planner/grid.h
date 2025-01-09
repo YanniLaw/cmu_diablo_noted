@@ -157,7 +157,7 @@ public:
   {
     return Pos2Sub(Eigen::Vector3d(x, y, z));
   }
-
+  // 根据pose计算对应的网格索引
   Eigen::Vector3i Pos2Sub(const Eigen::Vector3d& pos) const
   {
     Eigen::Vector3i sub(0, 0, 0);
@@ -294,6 +294,7 @@ private:
   int cell_number_;
   int dimension_;
 
+  // 一维索引转换为三维索引
   Eigen::Vector3i ind2sub_(int ind) const
   {
     // MY_ASSERT(InRange(ind));

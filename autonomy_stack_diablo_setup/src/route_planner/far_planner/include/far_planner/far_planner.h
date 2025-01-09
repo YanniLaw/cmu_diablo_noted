@@ -72,7 +72,7 @@ private:
     rclcpp::TimerBase::SharedPtr main_event_;
 
     std_msgs::msg::Float32 runtimer_, plan_timer_;
-
+    // 机器人当前世界位置，yaw角存储了两个值(cos,sin)
     Point3D robot_pos_, robot_heading_, nav_heading_;
 
     bool is_reset_env_, is_stop_update_, is_init_completed_;
@@ -156,7 +156,7 @@ private:
     }
 
     inline void JoyCommandCallBack(const sensor_msgs::msg::Joy::SharedPtr msg) {
-        if (msg->buttons[4] > 0.5) {
+        if (msg->buttons[4] > 0.5) { // LB按下
             is_reset_env_ = true;
         }
     } 

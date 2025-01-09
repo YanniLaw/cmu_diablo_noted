@@ -169,7 +169,7 @@ void FARMaster::MainLoopCallBack() {
   if (!is_init_completed_) {
     return;
   }
-  if (is_reset_env_) {
+  if (is_reset_env_) { // 重置可视图
       this->ResetEnvironmentAndGraph();
       is_reset_env_ = false;
       if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "****************** Graph and Env Reset ******************");
@@ -647,7 +647,7 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
     try
     {
       tf_buffer_->canTransform(master_params_.world_frame, odom_frame, tf2::TimePointZero, std::chrono::seconds(1));
-      auto transform_stamped = tf_buffer_->lookupTransform(master_params_.world_frame, odom_frame, tf2::TimePointZero);
+      auto transform_stamped = tf_buffer_->lookupTransform(master_params_.world_frame, odom_frame, tf2::TimePointZero); // 得到的是T_world_odom坐标变换
       tf2::fromMsg(transform_stamped.transform, odom_to_world_tf_stamp);
       tf_odom_pose = odom_to_world_tf_stamp * tf_odom_pose;
     }
@@ -677,7 +677,7 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
   is_odom_init_ = true;
 }
 
-
+// 点云处理，滤波+去掉异常值
 void FARMaster::PrcocessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc, const PointCloudPtr& cloudOut) 
 {
   pcl::PointCloud<PCLPoint> temp_cloud;
@@ -724,10 +724,13 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
   map_handler_.UpdateRobotPosition(FARUtil::robot_pos);
   if (!is_stop_update_) {
     this->PrcocessCloud(pc, temp_cloud_ptr_);
+    // 提取机器人附近点云
     FARUtil::CropBoxCloud(temp_cloud_ptr_, robot_pos_, Point3D(master_params_.terrain_range,
                                                                master_params_.terrain_range,
                                                                FARUtil::kTolerZ));
+    // 按高程值对点云进行分类提取
     FARUtil::ExtractFreeAndObsCloud(temp_cloud_ptr_, temp_free_ptr_, temp_obs_ptr_);
+    // 在动态环境中，去除重叠的障碍物点云
     if (!master_params_.is_static_env) {
       FARUtil::RemoveOverlapCloud(temp_obs_ptr_, FARUtil::stack_dyobs_cloud_, true);
     }
@@ -835,9 +838,9 @@ const float FARUtil::kEpsilon = 1e-7;
 const float FARUtil::kINF     = std::numeric_limits<float>::max();
 std::string FARUtil::worldFrameId;
 float   FARUtil::kAngleNoise; 
-Point3D FARUtil::robot_pos;
+Point3D FARUtil::robot_pos;   // 机器人当前实时位置
 Point3D FARUtil::odom_pos;
-Point3D FARUtil::map_origin;
+Point3D FARUtil::map_origin;  // 地图原点(即系统启动时机器人位置)
 Point3D FARUtil::free_odom_p;
 float   FARUtil::robot_dim;
 float   FARUtil::vehicle_height;

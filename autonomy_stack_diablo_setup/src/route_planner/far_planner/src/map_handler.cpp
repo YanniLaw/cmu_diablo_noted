@@ -13,18 +13,20 @@
 void MapHandler::Init(const MapHandlerParams& params) {
     map_params_ = params;
     const int row_num = std::ceil(map_params_.grid_max_length / map_params_.cell_length);
-    const int col_num = row_num;
-    int level_num = std::ceil(map_params_.grid_max_height / map_params_.cell_height);
+    const int col_num = row_num; // 地图水平面上的网格数目
+    int level_num = std::ceil(map_params_.grid_max_height / map_params_.cell_height); // 地图垂直面上的网格数目
+    // 根据传感器测量范围来计算附近的网格数量
     neighbor_Lnum_ = std::ceil(map_params_.sensor_range * 2.0f / map_params_.cell_length) + 1; 
     neighbor_Hnum_ = 5; 
     if (level_num % 2 == 0) level_num ++;           // force to odd number, robot will be at center
     if (neighbor_Lnum_ % 2 == 0) neighbor_Lnum_ ++; // force to odd number
 
     // inlitialize grid 
-    Eigen::Vector3i pointcloud_grid_size(row_num, col_num, level_num);
+    Eigen::Vector3i pointcloud_grid_size(row_num, col_num, level_num); // 最终的点云网格(体素)的尺寸 长宽高
     Eigen::Vector3d pointcloud_grid_origin(0,0,0);
-    Eigen::Vector3d pointcloud_grid_resolution(map_params_.cell_length, map_params_.cell_length, map_params_.cell_height);
+    Eigen::Vector3d pointcloud_grid_resolution(map_params_.cell_length, map_params_.cell_length, map_params_.cell_height); // 点云网格分辨率
     PointCloudPtr cloud_ptr_tmp;
+    // 这里的世界障碍物网格或者空闲网格 其实就是一个个的体素(长宽相同，高度不同)
     world_obs_cloud_grid_ = std::make_unique<grid_ns::Grid<PointCloudPtr>>(
         pointcloud_grid_size, cloud_ptr_tmp, pointcloud_grid_origin, pointcloud_grid_resolution, 3);
 
@@ -32,7 +34,7 @@ void MapHandler::Init(const MapHandlerParams& params) {
         pointcloud_grid_size, cloud_ptr_tmp, pointcloud_grid_origin, pointcloud_grid_resolution, 3);
 
     const int n_cell  = world_obs_cloud_grid_->GetCellNumber();
-    for (int i = 0; i < n_cell; i++) {
+    for (int i = 0; i < n_cell; i++) { // 初始化网格
         world_obs_cloud_grid_->GetCell(i) = PointCloudPtr(new PointCloud);
         world_free_cloud_grid_->GetCell(i) = PointCloudPtr(new PointCloud);
     }
@@ -43,12 +45,13 @@ void MapHandler::Init(const MapHandlerParams& params) {
     std::fill(util_free_modified_list_.begin(), util_free_modified_list_.end(), 0);
     std::fill(util_remove_check_list_.begin(), util_remove_check_list_.end(), 0);
 
-    // init terrain height map
+    // init terrain height map 初始化地形高度地图
+    // 先计算地形高度地图的尺寸(用传感器测量范围除以机器人的直径)，即得到多少个以机器人直径为长度的格子
     int height_dim = std::ceil((map_params_.sensor_range + map_params_.cell_length) * 2.0f / FARUtil::robot_dim);
-    if (height_dim % 2 == 0) height_dim ++;
+    if (height_dim % 2 == 0) height_dim ++; // 保持为奇数
     Eigen::Vector3i height_grid_size(height_dim, height_dim, 1);
     Eigen::Vector3d height_grid_origin(0,0,0);
-    Eigen::Vector3d height_grid_resolution(FARUtil::robot_dim, FARUtil::robot_dim, FARUtil::kLeafSize);
+    Eigen::Vector3d height_grid_resolution(FARUtil::robot_dim, FARUtil::robot_dim, FARUtil::kLeafSize); // voxel dim
     std::vector<float> temp_vec;
     terrain_height_grid_ = std::make_unique<grid_ns::Grid<std::vector<float>>>(
         height_grid_size, temp_vec, height_grid_origin, height_grid_resolution, 3);
@@ -61,7 +64,7 @@ void MapHandler::Init(const MapHandlerParams& params) {
     INFLATE_N = 1;
     flat_terrain_cloud_    = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
     kdtree_terrain_clould_ = PointKdTreePtr(new pcl::KdTreeFLANN<PCLPoint>());
-    kdtree_terrain_clould_->setSortedResults(false);
+    kdtree_terrain_clould_->setSortedResults(false); // 配置最近邻搜索结果不用进行排序
 }
 
 void MapHandler::ResetGripMapCloud() {
@@ -125,7 +128,7 @@ void MapHandler::GetCloudOfPoint(const Point3D& center,
     }
 }
 
-
+// 以输入的位姿为地图网格的中心，设置两个世界地图网格的origin(立方体左下角所处世界坐标)
 void MapHandler::SetMapOrigin(const Point3D& ori_robot_pos) {
     Point3D map_origin;
     const Eigen::Vector3i dim = world_obs_cloud_grid_->GetSize();
@@ -140,13 +143,15 @@ void MapHandler::SetMapOrigin(const Point3D& ori_robot_pos) {
 }
 
 void MapHandler::UpdateRobotPosition(const Point3D& odom_pos) {
-    if (!is_init_) this->SetMapOrigin(odom_pos);
+    if (!is_init_) this->SetMapOrigin(odom_pos); // 利用第一帧机器人位姿数据设置地图原点
+    // 更新机器人当前网格位置
     robot_cell_sub_ = world_obs_cloud_grid_->Pos2Sub(Eigen::Vector3d(odom_pos.x, odom_pos.y, odom_pos.z));
     // Get neighbor indices
     neighbor_free_indices_.clear(), neighbor_obs_indices_.clear();
     const int N = neighbor_Lnum_ / 2;
     const int H = neighbor_Hnum_ / 2;
     Eigen::Vector3i neighbor_sub;
+    // 根据机器人当前网格位置索引，计算其周围邻域的网格索引
     for (int i = -N; i <= N; i++) {
         neighbor_sub.x() = robot_cell_sub_.x() + i;
         for (int j = -N; j <= N; j++) {
@@ -166,7 +171,7 @@ void MapHandler::UpdateRobotPosition(const Point3D& odom_pos) {
             }
         }
     }
-    this->SetTerrainHeightGridOrigin(odom_pos);
+    this->SetTerrainHeightGridOrigin(odom_pos); // 实时更新地形高度地图的origin位置
 }
 
 void MapHandler::SetTerrainHeightGridOrigin(const Point3D& robot_pos) {

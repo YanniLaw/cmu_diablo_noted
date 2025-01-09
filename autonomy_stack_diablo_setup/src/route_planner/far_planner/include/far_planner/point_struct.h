@@ -21,6 +21,7 @@ typedef pcl::PointXYZI PCLPoint;
 typedef pcl::PointCloud<PCLPoint> PointCloud;
 typedef pcl::PointCloud<PCLPoint>::Ptr PointCloudPtr;
 
+// 程序内部用的自定义点格式,兼容eigen,pcl
 struct Point3D {
   float x, y, z;
   float intensity;
@@ -152,7 +153,7 @@ struct point_hash
     boost::hash_combine(seed, p.x);
     boost::hash_combine(seed, p.y);
     boost::hash_combine(seed, p.z);
-    return seed;
+    return seed; // 使用 boost::hash_combine 将 p.x、p.y 和 p.z 的值组合成一个单一的哈希值
   }
 };
 
