@@ -15,7 +15,7 @@ const char OBS_BIT  = char(2); // 0010
 const char RAY_BIT  = char(4); // 0100
 
 void ScanHandler::Init(const ScanHandlerParams& params) {
-    scan_params_ = params;
+    scan_params_ = params; // 为什么不直接改成3倍分辨率？？？
     row_num_ = std::ceil(scan_params_.terrain_range * 2.0f / (scan_params_.voxel_size*3));
     if (row_num_ % 2 == 0) row_num_ ++;
     col_num_ = row_num_;
@@ -23,7 +23,7 @@ void ScanHandler::Init(const ScanHandlerParams& params) {
     if (level_num_ % 2 == 0) level_num_ ++;
     Eigen::Vector3i grid_size(row_num_, col_num_, level_num_);
     Eigen::Vector3d grid_origin(0,0,0);
-    Eigen::Vector3d grid_resolution((scan_params_.voxel_size*3), (scan_params_.voxel_size*3), (scan_params_.voxel_size*3));
+    Eigen::Vector3d grid_resolution((scan_params_.voxel_size*3), (scan_params_.voxel_size*3), (scan_params_.voxel_size*3)); // 三倍的体素分辨率
     voxel_grids_ = std::make_unique<grid_ns::Grid<char>>(grid_size, INIT_BIT, grid_origin, grid_resolution, 3);
     is_grids_init_ = true;
 }

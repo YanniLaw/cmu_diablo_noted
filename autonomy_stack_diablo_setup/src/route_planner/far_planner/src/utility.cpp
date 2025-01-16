@@ -68,6 +68,7 @@ void FARUtil::ExtractNewObsPointCloud(const PointCloudPtr& cloudIn,
   }
 }
 
+// 重新设置点云的intensity属性(根据输入的isHigh变量)
 void FARUtil::ResetCloudIntensity(const PointCloudPtr& cloudIn, const bool isHigh) {
   const float kValue = isHigh? 255.0 : 0.0;
   for (std::size_t i=0; i<cloudIn->size(); i++) {
@@ -503,6 +504,13 @@ void FARUtil::ExtractOverlapCloud(const PointCloudPtr& cloudIn,
   cloudOverlapOut->resize(idx);
 }
 
+/**
+ * @brief 去除重叠的障碍物点云
+ * 
+ * @param cloudInOut 输入的障碍物点云
+ * @param cloudRef   已有的障碍物点云
+ * @param is_copy_cloud 是否拷贝点云数据
+ */
 void FARUtil::RemoveOverlapCloud(const PointCloudPtr& cloudInOut,
                                  const PointCloudPtr& cloudRef,
                                  const bool& is_copy_cloud) 
@@ -515,11 +523,11 @@ void FARUtil::RemoveOverlapCloud(const PointCloudPtr& cloudInOut,
     pcl::copyPointCloud(*cloudRef, *copyRefCloud);
     ref_cloud = copyRefCloud;
   }
-  FARUtil::ResetCloudIntensity(cloudInOut, true);
-  FARUtil::ResetCloudIntensity(ref_cloud, false);
-  *temp_cloud = *cloudInOut + *ref_cloud;
+  FARUtil::ResetCloudIntensity(cloudInOut, true); // 255 
+  FARUtil::ResetCloudIntensity(ref_cloud, false); // 0
+  *temp_cloud = *cloudInOut + *ref_cloud; // 点云拼接
   const float leaf_size = FARUtil::kLeafSize * 1.2;
-  FARUtil::FilterCloud(temp_cloud, leaf_size);
+  FARUtil::FilterCloud(temp_cloud, leaf_size); // 对点云进行体素滤波(增大滤波尺寸，去重的关键)
   cloudInOut->clear(), cloudInOut->resize(temp_cloud->size());
   std::size_t idx = 0;
   for (const auto& p : temp_cloud->points) {

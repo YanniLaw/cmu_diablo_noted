@@ -83,10 +83,10 @@ private:
     bool is_graph_init_;
 
     PointCloudPtr new_vertices_ptr_;
-    PointCloudPtr temp_obs_ptr_;
-    PointCloudPtr temp_free_ptr_;
-    PointCloudPtr temp_cloud_ptr_;
-    PointCloudPtr scan_grid_ptr_;
+    PointCloudPtr temp_obs_ptr_;    // 机器人附近障碍物点云,中间变量
+    PointCloudPtr temp_free_ptr_;   // 机器人附近free点云，中间变量
+    PointCloudPtr temp_cloud_ptr_;  // 机器人附近点云，中间变量
+    PointCloudPtr scan_grid_ptr_;   
     PointCloudPtr local_terrain_ptr_;
     PointCloudPtr terrain_height_ptr_;
 

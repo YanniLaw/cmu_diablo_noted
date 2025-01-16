@@ -730,7 +730,7 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
                                                                FARUtil::kTolerZ));
     // 按高程值对点云进行分类提取
     FARUtil::ExtractFreeAndObsCloud(temp_cloud_ptr_, temp_free_ptr_, temp_obs_ptr_);
-    // 在动态环境中，去除重叠的障碍物点云
+    // 在动态环境中，去除重叠的障碍物点云(对当前的障碍物点云进行处理，原地操作保存在temp_obs_ptr_中)
     if (!master_params_.is_static_env) {
       FARUtil::RemoveOverlapCloud(temp_obs_ptr_, FARUtil::stack_dyobs_cloud_, true);
     }
@@ -739,7 +739,7 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
     // extract new points
     FARUtil::ExtractNewObsPointCloud(temp_obs_ptr_,
                                      FARUtil::surround_obs_cloud_,
-                                     FARUtil::cur_new_cloud_);
+                                     FARUtil::cur_new_cloud_); // 与surround_obs_cloud_拼接后 再进行滤波
   } else { // stop env update
     temp_cloud_ptr_->clear();
     FARUtil::cur_new_cloud_->clear();
@@ -857,7 +857,7 @@ float   FARUtil::kTerrainRange;
 float   FARUtil::kLocalPlanRange;
 float   FARUtil::kFreeZ;
 float   FARUtil::kVizRatio;
-double  FARUtil::systemStartTime;
+double  FARUtil::systemStartTime; // 系统开始的时间(用里程计数据初始化)
 float   FARUtil::kObsDecayTime;
 float   FARUtil::kNewDecayTime;
 float   FARUtil::kNearDist;

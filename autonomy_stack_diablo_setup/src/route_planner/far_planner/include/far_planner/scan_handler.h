@@ -5,9 +5,9 @@
 
 struct ScanHandlerParams {
     ScanHandlerParams() = default;
-    float terrain_range;
-    float voxel_size;
-    float ceil_height;
+    float terrain_range;  // 地形范围
+    float voxel_size;     // 体素尺寸 
+    float ceil_height;    // 什么高度?? floor height
 };
 
 enum GridStatus {
@@ -50,7 +50,7 @@ private:
     Eigen::Vector3i center_sub_;
     int row_num_, col_num_, level_num_;
     bool is_grids_init_ = false;
-    PCLPoint center_p_;
+    PCLPoint center_p_; // scan中心位置，也就是机器人中心坐标
     // Set resolution for Velodyne LiDAR PUCK: https://www.amtechs.co.jp/product/VLP-16-Puck.pdf
     const float ANG_RES_Y = 2.0f/180.0f * M_PI; // vertical resolution 2 degree
     const float ANG_RES_X = 0.5f/180.0f * M_PI; // horizontal resolution 0.5 degree

@@ -203,28 +203,33 @@ void MapHandler::GetSurroundFreeCloud(const PointCloudPtr& freeCloudOut) {
     }
 }
 
+// 更新障碍物点云网格
 void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
     if (!is_init_ || obsCloudInOut->empty()) return;
+    // 先将网格索引列表的元素都置零
     std::fill(util_obs_modified_list_.begin(), util_obs_modified_list_.end(), 0);
     PointCloudPtr obs_valid_ptr(new pcl::PointCloud<PCLPoint>());
     for (const auto& point : obsCloudInOut->points) {
+        // 计算障碍物点的在world_obs_cloud_grid_中的网格索引
         Eigen::Vector3i sub = world_obs_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!world_obs_cloud_grid_->InRange(sub)) continue;
-        const int ind = world_obs_cloud_grid_->Sub2Ind(sub);
+        const int ind = world_obs_cloud_grid_->Sub2Ind(sub); // 转换为一维索引
+        // 如果该索引在机器人周围的索引列表范围内
         if (neighbor_obs_indices_.find(ind) != neighbor_obs_indices_.end()) {
-            world_obs_cloud_grid_->GetCell(ind)->points.push_back(point);
+            world_obs_cloud_grid_->GetCell(ind)->points.push_back(point); // 将该有效点添加进网格的点云中
             obs_valid_ptr->points.push_back(point);
             util_obs_modified_list_[ind] = 1;
             global_visited_induces_[ind] = 1;
         }
     }
     *obsCloudInOut = *obs_valid_ptr;
-    // Filter Modified Ceils
+    // Filter Modified Ceils 对刚添加的障碍物网格点云进行滤波
     for (int i = 0; i < world_obs_cloud_grid_->GetCellNumber(); ++i) {
       if (util_obs_modified_list_[i] == 1) FARUtil::FilterCloud(world_obs_cloud_grid_->GetCell(i), FARUtil::kLeafSize);
     }
 }
 
+// 更新free点云网格 步骤同上
 void MapHandler::UpdateFreeCloudGrid(const PointCloudPtr& freeCloudIn){
     if (!is_init_ || freeCloudIn->empty()) return;
     std::fill(util_free_modified_list_.begin(), util_free_modified_list_.end(), 0);
