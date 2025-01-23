@@ -20,6 +20,8 @@ def generate_launch_description():
     )
     home_directory = os.path.expanduser("~")
     
+    # DeclareLaunchArgument定义的参数只能在启动文件内使用
+    # 如果要将启动文件中的参数传递到节点，则可以通过 ros参数 / 环境变量 / 命令行 三种方式传入
     config_path_arg = DeclareLaunchArgument(
         "config_file",
         default_value=config_path,

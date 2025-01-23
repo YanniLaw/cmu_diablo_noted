@@ -8,13 +8,14 @@
 #include <iostream>
 #include <map>
 
+/* MapRingBuffer 是一个基于 std::map 的模板类，实现了一个环形缓冲区（Ring Buffer），用于管理按时间排序的测量数据。 */
 template <typename Meas>
 class MapRingBuffer {
 public:
-  std::map<double, Meas> measMap_;
+  std::map<double, Meas> measMap_; // 以时间戳为键存储测量数据
   typename std::map<double, Meas>::iterator itMeas_;
 
-  int size;
+  int size; // 环形缓冲区的最大容量
   double maxWaitTime_;
   double minWaitTime_;
 
@@ -24,7 +25,7 @@ public:
   }
 
   virtual ~MapRingBuffer() {}
-
+  // 分配缓冲区大小 
   bool allocate(const int sizeBuffer) {
     if (sizeBuffer <= 0) {
       return false;
@@ -33,9 +34,10 @@ public:
       return true;
     }
   }
-
+  // 获取缓冲区当前大小
   int getSize() { return measMap_.size(); }
 
+  // 添加测量数据到缓冲区
   void addMeas(const Meas& meas, const double& t) {
     measMap_.insert(std::make_pair(t, meas));
 
@@ -45,16 +47,19 @@ public:
     }
   }
 
+  // 清空缓冲区
   void clear() { measMap_.clear(); }
 
+  // 清理时间戳小于等于t的数据
   void clean(double t) {
     while (measMap_.size() >= 1 && measMap_.begin()->first <= t) {
       measMap_.erase(measMap_.begin());
     }
   }
 
+  // 找到第一个大于 actualTime 的时间戳并返回， 没找到就返回false
   bool getNextTime(double actualTime, double& nextTime) {
-    itMeas_ = measMap_.upper_bound(actualTime);
+    itMeas_ = measMap_.upper_bound(actualTime); // 查找键值严格大于指定键值的第一个元素的迭代器
     if (itMeas_ != measMap_.end()) {
       nextTime = itMeas_->first;
       return true;
@@ -72,6 +77,8 @@ public:
       time = measurementTime;
     }
   }
+
+  // 获取环形缓冲区最近(新)的时间戳
   bool getLastTime(double& lastTime) {
     if (!measMap_.empty()) {
       lastTime = measMap_.rbegin()->first;
@@ -81,6 +88,7 @@ public:
     }
   }
 
+  // 获取环形缓冲区最旧(老)的时间戳
   bool getFirstTime(double& firstTime) {
     if (!measMap_.empty()) {
       firstTime = measMap_.begin()->first;
@@ -90,6 +98,7 @@ public:
     }
   }
 
+  // 获取环形缓冲区最近(新)的测量数据
   bool getLastMeas(Meas& lastMeas) {
     if (!measMap_.empty()) {
       lastMeas = measMap_.rbegin()->second;
@@ -99,6 +108,7 @@ public:
     }
   }
 
+  // 获取环形缓冲区次新的测量数据
   bool getLastLastMeas(Meas& lastlastMeas) {
     if (measMap_.size() >= 2) {
       auto itr = measMap_.rbegin();
@@ -110,6 +120,7 @@ public:
     }
   }
 
+  // 获取环形缓冲区最老的测量数据
   bool getFirstMeas(Meas& firstMeas) {
     if (!measMap_.empty()) {
       firstMeas = measMap_.begin()->second;
@@ -119,6 +130,7 @@ public:
     }
   }
 
+  // 查看环形缓冲区是否有保存在某个时间戳上的测量数据
   bool hasMeasurementAt(double t) { return measMap_.count(t) > 0; }
 
   bool empty() { return measMap_.empty(); }

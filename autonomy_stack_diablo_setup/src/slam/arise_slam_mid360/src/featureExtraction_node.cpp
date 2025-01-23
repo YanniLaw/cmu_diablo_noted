@@ -13,6 +13,7 @@ int main(int argc, char **argv)
     std::shared_ptr<arise_slam::featureExtraction> featureExtraction =
         std::make_shared<arise_slam::featureExtraction>(options);
 
+    // 分配缓冲区大小
     featureExtraction->imuBuf.allocate(2000);
     featureExtraction->visualOdomBuf.allocate(2000);
     featureExtraction->lidarBuf.allocate(50);

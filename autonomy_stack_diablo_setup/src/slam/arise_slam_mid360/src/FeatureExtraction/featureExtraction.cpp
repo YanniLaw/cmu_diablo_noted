@@ -27,21 +27,24 @@ namespace arise_slam {
 
     void featureExtraction::initInterface() {      
         //! Callback Groups
-        cb_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
+        cb_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant); // 可重入回调组
         rclcpp::SubscriptionOptions sub_options;
         sub_options.callback_group = cb_group_;
 
+        // 读取SLAM几个节点公有的一些参数
         if(!readGlobalparam(shared_from_this()))
         {
             RCLCPP_ERROR(this->get_logger(), "[arise_slam::featureExtraction] Could not read calibration. Exiting...");
             rclcpp::shutdown();
         }
+        // 读取该节点特有的一些参数
         if (!readParameters())
         {
             RCLCPP_ERROR(this->get_logger(), "[arise_slam::featureExtraction] Could not read parameters. Exiting...");
             rclcpp::shutdown();
         }
         RCLCPP_INFO(this->get_logger(), "calibration");
+        // 读取标定参数
         if (!readCalibration(shared_from_this()))
         {
             RCLCPP_ERROR(this->get_logger(), "[arise_slam::featureExtraction] Could not read parameters. Exiting...");
