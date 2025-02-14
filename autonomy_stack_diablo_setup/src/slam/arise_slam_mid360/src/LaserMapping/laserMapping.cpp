@@ -425,9 +425,9 @@ namespace arise_slam {
     void laserMapping::laserFeatureInfoHandler(const arise_slam_mid360_msgs::msg::LaserFeature::SharedPtr msgIn) {
        
         mBuf.lock();
-        cornerLastBuf.push(msgIn->cloud_corner);
+        cornerLastBuf.push(msgIn->cloud_corner); // not used
         surfLastBuf.push(msgIn->cloud_surface);
-        realsenseBuf.push(msgIn->cloud_realsense);
+        realsenseBuf.push(msgIn->cloud_realsense); // not used
         fullResBuf.push(msgIn->cloud_nodistortion);
         Eigen::Quaterniond imuprediction_tmp(msgIn->initial_quaternion_w, msgIn->initial_quaternion_x,
                                              msgIn->initial_quaternion_y, msgIn->initial_quaternion_z);

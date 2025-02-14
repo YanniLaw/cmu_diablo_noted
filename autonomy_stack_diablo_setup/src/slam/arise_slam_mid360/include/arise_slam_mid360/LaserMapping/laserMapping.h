@@ -268,14 +268,14 @@ namespace arise_slam {
         pcl::VoxelGrid<PointType> downSizeFilterSurf;
 
 
-        std::queue<sensor_msgs::msg::PointCloud2> cornerLastBuf;
-        std::queue<sensor_msgs::msg::PointCloud2> surfLastBuf;
-        std::queue<sensor_msgs::msg::PointCloud2> realsenseBuf;
-        std::queue<sensor_msgs::msg::PointCloud2> fullResBuf;
+        std::queue<sensor_msgs::msg::PointCloud2> cornerLastBuf; // not used 
+        std::queue<sensor_msgs::msg::PointCloud2> surfLastBuf; // 去畸变后的点云数据
+        std::queue<sensor_msgs::msg::PointCloud2> realsenseBuf; // not used 
+        std::queue<sensor_msgs::msg::PointCloud2> fullResBuf; // 原始的点云数据
         std::queue<sensor_msgs::msg::PointCloud2> rawWithFeaturesBuf;
         std::queue<sensor_msgs::msg::PointCloud2::SharedPtr> rawDataBuf;
         std::queue<nav_msgs::msg::Odometry::SharedPtr> odometryBuf;
-        std::queue<Eigen::Quaterniond> IMUPredictionBuf;
+        std::queue<Eigen::Quaterniond> IMUPredictionBuf; // imu计算出来的姿态
         std::queue<SensorType> sensorTypeLastBuf;
         SensorType last_sensor_type_= SensorType::VELODYNE;
      

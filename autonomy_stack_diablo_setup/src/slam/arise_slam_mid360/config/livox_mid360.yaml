@@ -19,7 +19,7 @@ feature_extraction_node:
         scan_line: 4 #16 64
         sensor: "livox"
         mapping_skip_frame: 1
-        blindFront: 0.1
+        blindFront: 0.1 #box滤波参数 back是否太大了？
         blindBack: -0.2
         blindLeft: 0.1
         blindRight: -0.1

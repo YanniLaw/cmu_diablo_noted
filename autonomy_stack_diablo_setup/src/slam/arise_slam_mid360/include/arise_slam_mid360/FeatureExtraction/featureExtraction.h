@@ -59,7 +59,7 @@ namespace arise_slam {
      
     constexpr unsigned int BLOCK_TIME_NS = 55296;   // Time in ns for one block (measurement + recharge)
     constexpr std::size_t NUM_BLOCKS = 12;    // Number of blocks in a Velodyne packet
-    constexpr double LIDAR_MESSAGE_TIME = (double)(NUM_BLOCKS * BLOCK_TIME_NS * 151) * 1e-9;
+    constexpr double LIDAR_MESSAGE_TIME = (double)(NUM_BLOCKS * BLOCK_TIME_NS * 151) * 1e-9; // 0.100196352 s
 
     constexpr double IMU_TIME_LENIENCY = 0.1;
    

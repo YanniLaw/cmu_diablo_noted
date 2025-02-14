@@ -68,6 +68,7 @@ public:
       return R;
   }
 
+  // 利用收集的imu数据进行静态初始化
   void imuInit(MapRingBuffer<Imu::Ptr> imuBuf) {
       
     
@@ -93,6 +94,7 @@ public:
       }
     
       // Iterate through the IMU buffer and update mean and covariance
+      // 计算均值，协方差
       for (std::map<double, Imu::Ptr>::iterator itMeas_ = imuBuf.measMap_.begin(); itMeas_ != imuBuf.measMap_.end(); ++itMeas_) {
 
           const double &time_cur = itMeas_->second->time;
@@ -119,10 +121,11 @@ public:
       first_imu = false;
 
       // //Align with Gravity if the IMU is rotated at the beginning. 
+      // 根据平均加计数据来计算roll,pitch，以及将初始化位姿转换到水平重力系下的旋转矩阵
       Roll_Pitch_Gravity_Matrix=calculatePitchRollMatrix(acc_mean.x(), 
       acc_mean.y(), acc_mean.z());
 
-
+      // 通过重力方向校正 IMU 到 LiDAR 的外参变换，消除 IMU 安装倾斜的影响
       std::cout<<"imu_laser_R: "<<imu_laser_R<<std::endl;
       imu_laser_R_Gravity=Roll_Pitch_Gravity_Matrix.inverse()*imu_laser_R;
       Transformd imu_laser_transform_gravity_(imu_laser_R_Gravity, imu_laser_T); 
@@ -178,7 +181,7 @@ public:
   Eigen::Vector3d acc_cov; // covariance of accelerometer measurement
   Eigen::Vector3d gyr_cov; // covariance of gyroscope measurement
   Eigen::Quaterniond q_w_i;
-  Eigen::Matrix3d Roll_Pitch_Gravity_Matrix;
+  Eigen::Matrix3d Roll_Pitch_Gravity_Matrix; // 初始化时相对重力水平地面的相对姿态(roll，pitch)
   Eigen::Matrix3d imu_laser_R_Gravity;
   Transformd imu_laser_gravity_Transform;
   double pitch_offset_gravity;

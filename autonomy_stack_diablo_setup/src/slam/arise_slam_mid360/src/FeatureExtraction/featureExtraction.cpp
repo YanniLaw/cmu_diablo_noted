@@ -253,7 +253,7 @@ namespace arise_slam {
         PointType point;
         for (size_t i = 0; i < cloud_in.points.size(); ++i)
         {
-            //In the bounding box filter
+            //In the bounding box filter，首先进行box滤波，这个范围内的激光点不要(因为有其他的安装影响嘛)
             if (cloud_in.points[i].x > config_.box_size.blindBack && cloud_in.points[i].x < config_.box_size.blindFront &&
                 cloud_in.points[i].y > config_.box_size.blindRight && cloud_in.points[i].y < config_.box_size.blindLeft)
             {
@@ -264,7 +264,7 @@ namespace arise_slam {
             point.x = cloud_in.points[i].x;
             point.y = cloud_in.points[i].y;
             point.z = cloud_in.points[i].z;
-
+            // 对有效点按照最近最远距离进行滤波
             const Eigen::Vector3f &range = point.getVector3fMap();
             if (std::isfinite(point.x) && std::isfinite(point.y) &&
                 std::isfinite(point.z))
@@ -385,6 +385,7 @@ namespace arise_slam {
         }
 
         // RCLCPP_INFO(this->get_logger(), "q_w_original");
+        // lidar start的lidar位姿
         q_w_original_l = q_w_original * T_i_l.rot;
         q_w_original_l.normalized();
         t_w_original_l.x() = 0.0;
@@ -424,13 +425,14 @@ namespace arise_slam {
             }
         }
 
+        // 计算一帧雷达的 相对位姿变换
         Eigen::Quaterniond q_original_end = q_w_original.inverse() * q_w_end;
 
         q_original_end.normalized();
 
         for (auto &point : laserCloudIn)
         {
-            double t_b_i = point.time + lidar_start_time;
+            double t_b_i = point.time + lidar_start_time; // point.time表示相对base time的时间
             Eigen::Quaterniond q_w_i;
 
             auto after_ptr = imuBuf.measMap_.lower_bound(t_b_i); // 第一个大于等于
@@ -454,6 +456,7 @@ namespace arise_slam {
                 q_w_i = q_w_i_before.slerp(ratio_bi, q_w_i_after);
             }
 
+            // 该点的相对姿态
             Eigen::Quaterniond q_original_i = q_w_original.inverse() * q_w_i;
             Transformd T_original_i(q_original_i, Eigen::Vector3d::Zero());
 
@@ -1019,10 +1022,10 @@ namespace arise_slam {
     }
     
     void featureExtraction::publishTopic(double lidar_start_time, 
-                                         pcl::PointCloud<point_os::PointcloudXYZITR>::Ptr laser_no_distortion_points,
-                                         pcl::PointCloud<PointType>::Ptr edgePoints,
-                                         pcl::PointCloud<PointType>::Ptr plannerPoints, 
-                                         pcl::PointCloud<PointType>::Ptr depthPoints,
+                                         pcl::PointCloud<point_os::PointcloudXYZITR>::Ptr laser_no_distortion_points, // 原始点云数据
+                                         pcl::PointCloud<PointType>::Ptr edgePoints, // not used 
+                                         pcl::PointCloud<PointType>::Ptr plannerPoints, // 均匀采样后的点云数据
+                                         pcl::PointCloud<PointType>::Ptr depthPoints, // not used 
                                          Eigen::Quaterniond q_w_original_l)
     {
         FeatureHeader.frame_id = WORLD_FRAME;
@@ -1032,11 +1035,11 @@ namespace arise_slam {
         laserFeature.odom_available = false;
       
         laserFeature.cloud_nodistortion = publishCloud<point_os::PointcloudXYZITR>(pubLaserCloud, laser_no_distortion_points, FeatureHeader.stamp, SENSOR_FRAME);
-        laserFeature.cloud_corner = publishCloud<PointType>(pubEdgePoints, edgePoints, FeatureHeader.stamp, SENSOR_FRAME);
+        laserFeature.cloud_corner = publishCloud<PointType>(pubEdgePoints, edgePoints, FeatureHeader.stamp, SENSOR_FRAME);// not used 
         laserFeature.cloud_surface = publishCloud<PointType>(pubPlannerPoints, plannerPoints, FeatureHeader.stamp, SENSOR_FRAME);
-        laserFeature.cloud_realsense=publishCloud<PointType>(pubBobPoints, depthPoints, FeatureHeader.stamp, SENSOR_FRAME);
+        laserFeature.cloud_realsense=publishCloud<PointType>(pubBobPoints, depthPoints, FeatureHeader.stamp, SENSOR_FRAME);// not used 
        
-        laserFeature.initial_quaternion_x = q_w_original_l.x();
+        laserFeature.initial_quaternion_x = q_w_original_l.x(); // lidar start time时 lidar的位姿
         laserFeature.initial_quaternion_y = q_w_original_l.y();
         laserFeature.initial_quaternion_z = q_w_original_l.z();
         laserFeature.initial_quaternion_w= q_w_original_l.w();
@@ -1047,6 +1050,8 @@ namespace arise_slam {
 
     void featureExtraction::undistortionAndscanregistration()
     {
+        // 判断数据是否可以同步，以进行接下来的去畸变处理
+        // 即测试数据的时间要小于lidar buffer第一帧开始，大于lidar buffer第一帧结束
         LASER_IMU_SYNC_SCCUESS = synchronize_measurements<Imu::Ptr>(imuBuf, lidarBuf);
 
         LASER_CAMERA_SYNC_SUCCESS = synchronize_measurements<nav_msgs::msg::Odometry::SharedPtr>(visualOdomBuf, lidarBuf);
@@ -1094,10 +1099,12 @@ namespace arise_slam {
                 vioRemovePointDistortion(lidar_start_time, lidar_end_time, visualOdomBuf, lidar_msg);
             }
 
+            // 走这个流程
             if (LASER_IMU_SYNC_SCCUESS == true and LASER_CAMERA_SYNC_SUCCESS == false)
             {
                // RCLCPP_INFO(this->get_logger(), "\033[1;32m----> IMU and laserscan are synchronized!.\033[0m");
                 //if(delay_count_>60)
+                // 利用imu数据去掉lidar数据的畸变
                 imuRemovePointDistortion(lidar_start_time, lidar_end_time, imuBuf, lidar_msg);
             }
 
@@ -1213,6 +1220,7 @@ namespace arise_slam {
             //TODO: Gravity should read from yaml file.
             double gravity = 9.8105;
 
+            // 将加计数据转换到重力对齐坐标系
             gyr = imu_Init->imu_laser_R_Gravity * gyr;
             accel = imu_Init->imu_laser_R_Gravity * imudata->acc; // accel
 
@@ -1233,7 +1241,7 @@ namespace arise_slam {
             const double &time_last = imuBuf.measMap_.rbegin()->second->time;
 
             double dt = timestamp - time_last;
-            Eigen::Vector3d delta_angle = dt * 0.5 * (gyr + gyr_last);
+            Eigen::Vector3d delta_angle = dt * 0.5 * (gyr + gyr_last); // 中值积分计算旋转角度变化
             Eigen::Quaterniond delta_r =
                 Sophus::SO3d::exp(delta_angle).unit_quaternion();
 
@@ -1245,6 +1253,7 @@ namespace arise_slam {
         else
         {
             // In fact this function should only works for the first pose
+            // 用第一帧IMU的角度数据来进行设置
             if (config_.use_imu_roll_pitch)
             {
                 // Eigen::Quaterniond q(msg->orientation.w, msg->orientation.x, msg->orientation.y, msg->orientation.z);
@@ -1265,7 +1274,7 @@ namespace arise_slam {
                 // first_orientation = orientation_curr;
 
                 imudata->q_w_i = Eigen::Quaterniond(first_orientation.w(), first_orientation.x(), first_orientation.y(), first_orientation.z());
-            }
+            } // 否则就直接设置为I
         }
 
         imuBuf.addMeas(imudata, timestamp);
@@ -1274,12 +1283,12 @@ namespace arise_slam {
         visualOdomBuf.getFirstTime(vio_first_time);
 
         double lidar_first_time = 0;
-        if(lidarBuf.getFirstTime(lidar_first_time)) {
+        if(lidarBuf.getFirstTime(lidar_first_time)) { // lidar buffer有数据的情况
             // std::cout << std::fixed << std::setprecision(10);
             // std::cout << "imu Timestamp: " << timestamp << std::endl; 
             // std::cout << "lidar_last_time: " << lidar_last_time << std::endl;
             // std::cout << "LIDAR_MESSAGE_TIME: " << LIDAR_MESSAGE_TIME << std::endl;        
-            
+            // 当前帧IMU的时间戳 至少 大于一帧激光雷达间隔时间，也就是 IMU数据能够包裹两帧激光雷达数据
             if (timestamp > lidar_first_time + LIDAR_MESSAGE_TIME + 0.05)
             {   
               
@@ -1289,6 +1298,8 @@ namespace arise_slam {
                     double first_time = 0.0;
                     imuBuf.getFirstTime(first_time);
 
+                    // --- IMU静态初始化 ---
+                    // imu未完成静态初始化 且 已经收集到了至少1s的imu数据 (这种情况下lidar也要有数据才行)
                     if (timestamp-first_time>200*m_imuPeriod and IMU_INIT==false)
                     {   
                         //TODO: IMUInit might be not necessary since it is only for accleration 
@@ -1397,7 +1408,7 @@ namespace arise_slam {
 
     void featureExtraction::laserCloudHandler(const sensor_msgs::msg::PointCloud2::SharedPtr laserCloudMsg)
     {  
-
+        // 需要imu buffer有数据或者收到激光雷达五次以上
         if (imuBuf.empty() || delay_count_++ <= 5)
         {
             RCLCPP_WARN(this->get_logger(), "imu buf empty");
@@ -1481,7 +1492,7 @@ namespace arise_slam {
             RCLCPP_WARN(this->get_logger(), "Lidar buffer too large, dropping frame");
             curLidarBufferSize = lidarBuf.getSize();
         }
-        
+        // 滤波
         removeClosestFarestPointCloud(*pointCloud, *pointCloud, config_.min_range, config_.max_range);
         lidarBuf.addMeas(pointCloud, laserCloudMsg->header.stamp.sec + laserCloudMsg->header.stamp.nanosec*1e-9);
         
@@ -1502,6 +1513,23 @@ namespace arise_slam {
         return R_pitch;
     }
 
+    /*
+        # Custom message type for Livox LiDAR point cloud
+        std_msgs/Header header      # ROS 消息头部，包含时间戳和 frame_id
+        uint8 lidar_id             # LiDAR 设备 ID（多设备情况下用于区分）
+        uint8 reserved             # 预留字段（目前未使用）
+        uint32 point_num           # 当前帧点云中的点数
+        uint64 timebase            # 时间基准（起始时间，单位：ns）
+        bool  time_sync            # 是否使用外部时间同步
+        uint8[3]  reserved2        # 预留字段
+        uint32[] offset_time       # 每个点的时间偏移量（相对于 `timebase`，单位：ns）
+        float32[] point_x          # 点云 X 坐标（单位：m）
+        float32[] point_y          # 点云 Y 坐标（单位：m）
+        float32[] point_z          # 点云 Z 坐标（单位：m）
+        uint8[] reflectivity       # 反射强度
+        uint8[] tag                # Livox 标签信息（点的类别，区别动态点、静态点等）
+        uint8[] line               # 激光通道号（适用于 **Horizon** 和 **Avia**）
+    */
     //TODO: add livox mid360 handler
     void featureExtraction::livoxHandler(const livox_ros_driver2::msg::CustomMsg::UniquePtr msg)
     {     
@@ -1547,6 +1575,7 @@ namespace arise_slam {
                         pointCloud->points[i].intensity = msg->points[i].reflectivity;
                         //pointCloud->points[i].time = msg->points[i].offset_time / float(1000000);  // time of each laser points
                         //TODO:Temporary fix the timestamp for livox
+                        // offset_time 每个点的时间偏移量(相对于timebase 单位 ns)
                         pointCloud->points[i].time = msg->points[i].offset_time / float(1000000000);  // time of each laser points
                         
                     }
