@@ -425,10 +425,10 @@ namespace arise_slam {
     void laserMapping::laserFeatureInfoHandler(const arise_slam_mid360_msgs::msg::LaserFeature::SharedPtr msgIn) {
        
         mBuf.lock();
-        cornerLastBuf.push(msgIn->cloud_corner); // not used
-        surfLastBuf.push(msgIn->cloud_surface);
-        realsenseBuf.push(msgIn->cloud_realsense); // not used
-        fullResBuf.push(msgIn->cloud_nodistortion);
+        cornerLastBuf.push(msgIn->cloud_corner);    // not used
+        surfLastBuf.push(msgIn->cloud_surface);     // 去畸变后且滤波的点云
+        realsenseBuf.push(msgIn->cloud_realsense);  // not used
+        fullResBuf.push(msgIn->cloud_nodistortion); // 原始点云
         Eigen::Quaterniond imuprediction_tmp(msgIn->initial_quaternion_w, msgIn->initial_quaternion_x,
                                              msgIn->initial_quaternion_y, msgIn->initial_quaternion_z);
 
@@ -484,7 +484,7 @@ namespace arise_slam {
                 q_wodom_pre = q_w_curr;
                 T_w_lidar.rot=q_w_curr;
                 
-                if(slam.local_mode)
+                if(slam.local_mode) // 定位模式下用参数文件的值来进行设置初始位姿
                 {
                     
                 T_w_lidar.pos=Eigen::Vector3d(slam.init_x, slam.init_y, slam.init_z);
@@ -532,7 +532,7 @@ namespace arise_slam {
             T_w_lidar.rot = q_w_curr;
             startupCount--;
         }
-        else
+        else // 正常情况
         {   
           
             if (config_.use_imu_roll_pitch)
@@ -1048,7 +1048,7 @@ namespace arise_slam {
         if(config_.auto_voxel_size)
         {
             Eigen::Vector3f average(0,0,0);
-            int count_far_points = 0;
+            int count_far_points = 0; // 超过3m远的点的数量
            // RCLCPP_INFO(this->get_logger(), "Asurface size: %zu", laserCloudSurfLast->points.size());
             for (auto &point : *laserCloudSurfLast)
             {
@@ -1060,6 +1060,7 @@ namespace arise_slam {
                 }
             }
            // RCLCPP_INFO(this->get_logger(), "count_far_points: %d", count_far_points);
+           // 距离较远的点数量过多，增加盲区半径
             if (count_far_points > 3000)
             {
                 increase_blind_radius = true;
@@ -1153,7 +1154,7 @@ namespace arise_slam {
                     realsenseBuf.pop();
                 }
 
-
+                // imu累积出来的姿态(q_w_lidar_start)
                 Eigen::Quaterniond IMUPrediction;
                 IMUPrediction = IMUPredictionBuf.front();
                 IMUPredictionBuf.pop();
@@ -1208,6 +1209,7 @@ namespace arise_slam {
 
                 mBuf.unlock();
                 TicToc t_whole;
+                // 根据点云自动调节滤波参数大小，并进行滤波
                 int laserCloudCornerStackNum=0;
                 int laserCloudSurfStackNum=0;
                 adjustVoxelSize(laserCloudCornerStackNum, laserCloudSurfStackNum);

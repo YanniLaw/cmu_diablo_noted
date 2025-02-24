@@ -23,7 +23,7 @@ namespace arise_slam {
     }
 
     void LidarSLAM::Localization(bool initialization, PredictionSource predictodom, Transformd position,
-                                 pcl::PointCloud<Point>::Ptr edge_point,
+                                 pcl::PointCloud<Point>::Ptr edge_point, // not used
                                  pcl::PointCloud<Point>::Ptr planner_point,double timeLaserOdometry) {
         bInitilization = initialization;
         T_w_lidar = position;

@@ -1123,7 +1123,7 @@ namespace arise_slam {
                 assert (plannerPoints->size()>0);     
                 publishTopic(lidar_start_time, lidar_msg, edgePoints, plannerPoints, bobPoints, q_w_original_l);   
 
-            }else
+            }else // 如果不是mid360，进行特征提取，提取角点 平面点等
             {
                 feature_extraction(lidar_start_time, *lidar_msg);
             }
