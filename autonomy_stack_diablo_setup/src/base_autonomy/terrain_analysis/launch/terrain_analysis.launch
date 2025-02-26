@@ -12,9 +12,9 @@
     <param name="maxGroundLift" value="0.15" /> <!-- 地面升降最高的高度(跟上面的参数配合使用) -->
     <param name="clearDyObs" value="true" />
     <param name="minDyObsDis" value="0.3" /> <!-- 清除动态障碍物的最小距离 -->
-    <param name="minDyObsAngle" value="0.0" /> <!-- 最小动态障碍物的正切角(不在车身系下) deg -->
-    <param name="minDyObsRelZ" value="-0.3" /> <!-- 最小动态障碍物的高度 -->
-    <param name="absDyObsRelZThre" value="0.2" /> <!-- 动态障碍物点在车身系下的高度阈值，我只考虑这么高的障碍物 -->
+    <param name="minDyObsAngle" value="0.0" /> <!-- 最小动态障碍物的正切角(不在车身系 map系下) deg -->
+    <param name="minDyObsRelZ" value="-0.3" /> <!-- 最小动态障碍物的相对高度(相对vehicle map系下) -->
+    <param name="absDyObsRelZThre" value="0.2" /> <!-- 动态障碍物点在车身系下的高度阈值，我只考虑这么高/低的障碍物 -->
     <param name="minDyObsVFOV" value="-28.0" /> <!-- 动态障碍物在车身坐标系下的FOV -->
     <param name="maxDyObsVFOV" value="33.0" />
     <param name="minDyObsPointNum" value="1" />

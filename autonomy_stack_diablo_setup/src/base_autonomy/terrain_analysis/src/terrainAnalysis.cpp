@@ -62,10 +62,14 @@ double maxRelZ = 0.2;
 double disRatioZ = 0.2;
 
 // terrain voxel parameters
-// 地形体素参数，地形分析是对一个长宽一样的立方体进行分析
-// 简要介绍下地形体素的排放
-// 每个体素的格子大小为0.2m，该地形一共有 21 * 21 = 441 个格子
-// 换算成物理实际面积大概 4.2 * 4.2 = 17.64 m^2
+// 整个地形分析程序包含高低两种分辨率的体素，
+// 其中低分辨率体素存储的是从slam端传过来的点云数据，存储的点云数据的距离范围比较大
+// 高分辨率体素(平面体素)存储的是真正的地形分析数据，存储的点云的距离范围比较小
+
+// 这两种分辨率的体素坐标以及一维表示其实都是类似的
+// 下面以地形分析的平面体素为例，简要介绍下平面体素的摆放
+// 每个地形体素的格子大小为1m，该地形一共有 21 * 21 = 441 个格子，换算成物理实际面积 441 m^2
+// 同样，对于高分辨率平面体素来说，一共51 * 51 = 2601 个格子，换算成物理实际面积 10.2 * 10.2 = 104.04 m^2
 /*
                   ^ y 
                   |
@@ -104,21 +108,23 @@ const int planarVoxelNum = planarVoxelWidth * planarVoxelWidth; // 平面体素�
 pcl::PointCloud<pcl::PointXYZI>::Ptr
     laserCloud(new pcl::PointCloud<pcl::PointXYZI>()); // ros转换过来的点云数据
 pcl::PointCloud<pcl::PointXYZI>::Ptr
-    laserCloudCrop(new pcl::PointCloud<pcl::PointXYZI>());  // 裁剪后的点云数据
+    laserCloudCrop(new pcl::PointCloud<pcl::PointXYZI>());  // 初步裁剪后的点云数据(map系下)
 pcl::PointCloud<pcl::PointXYZI>::Ptr
-    laserCloudDwz(new pcl::PointCloud<pcl::PointXYZI>());
+    laserCloudDwz(new pcl::PointCloud<pcl::PointXYZI>()); // 一个中间变量，存储低分辨率voxel中降采样后的点云数据
 pcl::PointCloud<pcl::PointXYZI>::Ptr
-    terrainCloud(new pcl::PointCloud<pcl::PointXYZI>());
+    terrainCloud(new pcl::PointCloud<pcl::PointXYZI>()); // 附近5m 范围的点云数据
 pcl::PointCloud<pcl::PointXYZI>::Ptr
     terrainCloudElev(new pcl::PointCloud<pcl::PointXYZI>());
-pcl::PointCloud<pcl::PointXYZI>::Ptr terrainVoxelCloud[terrainVoxelNum];
+pcl::PointCloud<pcl::PointXYZI>::Ptr terrainVoxelCloud[terrainVoxelNum]; // 低分辨率体素数组 存储点云数据
 
 int terrainVoxelUpdateNum[terrainVoxelNum] = {0};
-float terrainVoxelUpdateTime[terrainVoxelNum] = {0}; // 体素一维数组的更新时间
-float planarVoxelElev[planarVoxelNum] = {0}; // 存储最终的平面体素高程值
+float terrainVoxelUpdateTime[terrainVoxelNum] = {0}; // 地形体素一维数组的更新时间
+
+float planarVoxelElev[planarVoxelNum] = {0}; // 存储最终选取的高分辨率平面体素的高程值
 int planarVoxelEdge[planarVoxelNum] = {0};
 int planarVoxelDyObs[planarVoxelNum] = {0};
-vector<float> planarPointElev[planarVoxelNum]; // planarPointElev 是一个大小为 planarVoxelNum 的数组，数组的每个元素是一个 std::vector<float>
+vector<float> planarPointElev[planarVoxelNum]; // 存储的是每个高分辨率平面体素中所有点的额高程值
+// planarPointElev 是一个大小为 planarVoxelNum 的数组，数组的每个元素是一个 std::vector<float>
 
 double laserCloudTime = 0; // 当前帧接收到的点云时间
 bool newlaserCloud = false;
@@ -197,7 +203,8 @@ void laserCloudHandler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr laser
                      (pointY - vehicleY) * (pointY - vehicleY));
     // 从两个维度(竖直和水平)对点云进行裁剪 minRelZ: -1.5  maxRelZ: 0.3 水平 11m
     // disRatioZ 是一个调整因子，表示高度裁剪范围随水平距离的变化。越远的点，允许的高度范围越宽
-    // 高度裁剪范围随距离变化, 可以动态适应不同环境需求
+    // 高度裁剪范围随距离变化, 可以动态适应不同环境需求(比如负值比较大可以应对大下坡场景)
+    // 如果机器仅仅是在水平地面行走的话，这两个值根据激光雷达到机器人顶部以及地面的距离取值即可(因为建图的时候是以激光雷达坐标系为准建图的)
     if (pointZ - vehicleZ > minRelZ - disRatioZ * dis &&
         pointZ - vehicleZ < maxRelZ + disRatioZ * dis &&
         dis < terrainVoxelSize * (terrainVoxelHalfWidth + 1)) {
@@ -386,7 +393,7 @@ int main(int argc, char **argv) {
       pcl::PointXYZI point;
       // laserCloudCrop中的点都为map坐标
       int laserCloudCropSize = laserCloudCrop->points.size();
-      // 将当前帧点云中的点(裁剪后)加入到对应体素数组中，并更新对应体素中拥有的相应的点云数目
+      // 首先将当前帧点云中的点(裁剪后)加入到对应低分辨率体素数组中，并更新对应体素中拥有的相应的点云数目
       for (int i = 0; i < laserCloudCropSize; i++) {
         point = laserCloudCrop->points[i];
         // 由于地形体素一直是以机器人的当前位姿为中心的，所以这里就是计算当前点在地形体素中的体素索引
@@ -404,27 +411,31 @@ int main(int argc, char **argv) {
           indY--;
         // 将当前帧的点加入到对应的存储当前地形体素的一维数组中
         if (indX >= 0 && indX < terrainVoxelWidth && indY >= 0 &&
-            indY < terrainVoxelWidth) { // 确保处理的点在附近地形体素范围内
+            indY < terrainVoxelWidth) { // 只处理的处于规定地形体素范围内的点
           terrainVoxelCloud[terrainVoxelWidth * indX + indY]->push_back(point); // 注意，这个一维数组是列主序
           terrainVoxelUpdateNum[terrainVoxelWidth * indX + indY]++;
         }
       }
-      // 更新当前地形体素数组数据
+      // 循环遍历更新当前低分辨率地形体素数组数据
       for (int ind = 0; ind < terrainVoxelNum; ind++) { // 遍历所有地形体素一维数组的数据
-        // 有以下三种情况就进行体素更新: 1. 体素内当前帧的点的数量达到一定阈值; 2. 距离上一次体素更新时间达到一定时间阈值; 3. 收到了清除点云的指令
+        // 有以下三种情况就进行低分辨率体素更新: 
+        // 1. 当前低分辨率体素内点的数量达到一定阈值(指的是距离上一次更新后经过所有点云帧数据插入后(有可能不止一次插帧!!!!)); 
+        // 2. 当前时间距离上一次更新该低分辨率体素达到了规定的时间阈值; 
+        // 3. 收到了清除点云的指令
         if (terrainVoxelUpdateNum[ind] >= voxelPointUpdateThre ||
             laserCloudTime - systemInitTime - terrainVoxelUpdateTime[ind] >=
                 voxelTimeUpdateThre ||
             clearingCloud) {
           pcl::PointCloud<pcl::PointXYZI>::Ptr terrainVoxelCloudPtr =
               terrainVoxelCloud[ind]; // 指向当前选定的体素点云 智能指针
-          // 对选定体素内的点云进行降采样
+          // 对选定低分辨率体素内的点云进行降采样
           laserCloudDwz->clear();
-          downSizeFilter.setInputCloud(terrainVoxelCloudPtr);
+          downSizeFilter.setInputCloud(terrainVoxelCloudPtr); // 降采样尺寸大小为 0.05 
           downSizeFilter.filter(*laserCloudDwz);
 
-          terrainVoxelCloudPtr->clear(); // 清除掉原体素中的数据
+          terrainVoxelCloudPtr->clear(); // 清除掉原体素中存储的数据
           int laserCloudDwzSize = laserCloudDwz->points.size();
+          // 对于降采样后的点，再进行一轮筛选，然后再放入到低分辨率体素中
           for (int i = 0; i < laserCloudDwzSize; i++) { // 遍历降采样后的点云数据
             point = laserCloudDwz->points[i];
             float dis = sqrt((point.x - vehicleX) * (point.x - vehicleX) +
@@ -433,18 +444,19 @@ int main(int argc, char **argv) {
             if (point.z - vehicleZ > minRelZ - disRatioZ * dis &&
                 point.z - vehicleZ < maxRelZ + disRatioZ * dis &&
                 (laserCloudTime - systemInitTime - point.intensity <
-                     decayTime || // 这句话的意思是多久以前的点云就不考虑了，只考虑最近decayTime内的点云数据
+                     decayTime || // 这句话的意思是多久以前的点云就不考虑了，只考虑最近decayTime内的点云数据 或者 距离在noDecayDis内的点云数据是永久保存的???存疑！！！
                  dis < noDecayDis) &&
                 !(dis < clearingDis && clearingCloud)) { // ！(P && Q) 等价于 ！P | !Q （德摩根定律）
+                  // 上面这句是针对clearingCloud的，如果清除点云命令，就不会添加新的点云数据了，而且前面已经对点云数据做了清除  这句代码写的有点拗口
               terrainVoxelCloudPtr->push_back(point); // 将更新的点添加到该体素中
             }
           }
           // 重置一些变量
-          terrainVoxelUpdateNum[ind] = 0;
-          terrainVoxelUpdateTime[ind] = laserCloudTime - systemInitTime;
+          terrainVoxelUpdateNum[ind] = 0; // 如果这里做了置零处理的话，那么terrainVoxelUpdateNum[ind]其实就表示距离上一次更新后当前voxel插入的点云数量了
+          terrainVoxelUpdateTime[ind] = laserCloudTime - systemInitTime; // 更新当前低分辨率体素的更新时间
         }
       }
-      // 获取附近5米范围(100m^2)的点云数据
+      // 获取附近5米范围(100m^2)的点云数据(点云存储在低分辨率体素中)
       terrainCloud->clear();
       for (int indX = terrainVoxelHalfWidth - 5;
            indX <= terrainVoxelHalfWidth + 5; indX++) {
@@ -455,19 +467,19 @@ int main(int argc, char **argv) {
       }
 
       // estimate ground and compute elevation for each point
-      // 重置变量先
+      // 重置高分辨率平面体素相关的一些变量先
       for (int i = 0; i < planarVoxelNum; i++) {
         planarVoxelElev[i] = 0;
         planarVoxelEdge[i] = 0;
         planarVoxelDyObs[i] = 0;
         planarPointElev[i].clear();
       }
-      // 对机器人附近5m(100m^2)范围的点云，划分为400个分辨率为0.2的格子(更细的分辨率)，进行地面估计
+      // 对机器人附近5m(100m^2)范围的点云，划分为400个分辨率为0.2的格子(更细的分辨率)，统计他们的高程值，以及碍物数量估计
       // 这里的平面体素其像素坐标系与地形体素的像素坐标系是差不多的，左下角为原点，其他跟世界坐标系的方向对齐
       int terrainCloudSize = terrainCloud->points.size();
       for (int i = 0; i < terrainCloudSize; i++) {
         point = terrainCloud->points[i];
-        // 计算在平面细分辨率体素中的索引
+        // 计算在高分辨率平面体素中的索引
         int indX =
             int((point.x - vehicleX + planarVoxelSize / 2) / planarVoxelSize) +
             planarVoxelHalfWidth;
@@ -479,21 +491,24 @@ int main(int argc, char **argv) {
           indX--;
         if (point.y - vehicleY + planarVoxelSize / 2 < 0)
           indY--;
-        // 将当前点的高度值存储到当前平面体素及其邻域的 3×3 网格单元中，邻域扩展的目的是处理网格边界或降低数据稀疏性
-        // 只考虑高度值在一定范围内的点
+        // 将当前点的高度值存储到当前高分辨率平面体素及其邻域的 3×3 网格单元体素中，邻域扩展的目的是处理网格边界或降低数据稀疏性
+        // 由于一个体素的大小是0.2m，所以其实这样做会影响到周围0.3m远的方框中
+        // 只考虑高度值在一定范围内的点(这个条件在前面点的筛选中已经做过了很多次了)
         if (point.z - vehicleZ > minRelZ && point.z - vehicleZ < maxRelZ) {
           for (int dX = -1; dX <= 1; dX++) {
             for (int dY = -1; dY <= 1; dY++) {
               if (indX + dX >= 0 && indX + dX < planarVoxelWidth &&
                   indY + dY >= 0 && indY + dY < planarVoxelWidth) {
                 planarPointElev[planarVoxelWidth * (indX + dX) + indY + dY] // 里面可能存在多个值 std::vector<float>
-                    .push_back(point.z);
+                    .push_back(point.z); // elevation 高程 就是点的z坐标(map系下)
               }
             }
           }
         }
-        // 如果要清除掉动态障碍物的话，首先统计每个平面体素中满足要求的点的个数(机器人附近5m的所有点)
+        // 如果要清除掉动态障碍物的话，首先统计每个高分辨率平面体素中点的个数(机器人附近5m的所有点)， 
+        // 先假设所有的障碍物都是动态的障碍物并统计所有障碍物，然后利用当前帧去除动态障碍
         if (clearDyObs) {
+          // 如果该点处于高分辨率平面体素地图的范围内(其实就是附近5m，原则上都会满足这一句)
           if (indX >= 0 && indX < planarVoxelWidth && indY >= 0 &&
               indY < planarVoxelWidth) {
             // 激光点相对机器人的相对物理坐标(只是位置，不一定是角度)
@@ -501,12 +516,13 @@ int main(int argc, char **argv) {
             float pointY1 = point.y - vehicleY;
             float pointZ1 = point.z - vehicleZ;
             // 动态障碍物的初步距离和角度筛选//
+            // 1. 世界坐标系下的初筛
             float dis1 = sqrt(pointX1 * pointX1 + pointY1 * pointY1);
-            if (dis1 > minDyObsDis) { //我们认为处于这个距离不会产生动态障碍物
-              // 减去这个值 等于加上0.3 ，也就是考虑与diablo雷达水平面以下0.3m的点(因为这里minDyObsAngle等于0)
+            if (dis1 > minDyObsDis) { //我们认为处于这个距离不会产生动态障碍物(这个距离其实就是车身的宽度)
+              // 减去这个minDyObsRelZ值 等于加上0.3 ，也就是考虑与diablo雷达水平面以下0.3m的点(因为这里minDyObsAngle等于0)
               float angle1 = atan2(pointZ1 - minDyObsRelZ, dis1) * 180.0 / PI;
               if (angle1 > minDyObsAngle) {
-                // 将世界坐标系下的点转到车身坐标系下 ZYX顺序
+                // 将该点转到车身坐标系下(前面算出的相对坐标其实还是在map系下) ZYX顺序
                 float pointX2 =
                     pointX1 * cosVehicleYaw + pointY1 * sinVehicleYaw;
                 float pointY2 =
@@ -525,6 +541,7 @@ int main(int argc, char **argv) {
                 float pointZ4 =
                     -pointY3 * sinVehicleRoll + pointZ3 * cosVehicleRoll;
                 // 这里才将点真正的转换到车身坐标系下
+                // 2. 车身坐标系的二次筛选(FOV,高度的绝对值)
                 float dis4 = sqrt(pointX4 * pointX4 + pointY4 * pointY4);
                 float angle4 = atan2(pointZ4, dis4) * 180.0 / PI;
                 if (angle4 > minDyObsVFOV && angle4 < maxDyObsVFOV || fabs(pointZ4) < absDyObsRelZThre) {
@@ -538,8 +555,8 @@ int main(int argc, char **argv) {
           }
         }
       }
-      // 上一步clearDyObs的时候统计了平面体素内动态障碍物的个数，这一步是根据当前帧的点云来进行清零
-      // 也就是如果该帧点云处在了某个具体平面体素中，就将该数量清零，那么就说明他不太可能是动态障碍物！
+      // 上一步clearDyObs的时候统计了高分辨率平面体素内障碍物的个数，这一步是根据当前帧的点云来进行动态障碍物的去除!!!
+      // 也就是如果该帧点云处在了某个具体高分辨率平面体素中，那么就说明他不太可能是动态障碍物，就将该数量清零！
       if (clearDyObs) {
         for (int i = 0; i < laserCloudCropSize; i++) {
           point = laserCloudCrop->points[i];
@@ -571,16 +588,17 @@ int main(int argc, char **argv) {
         }
       }
 
-      // 对平面体素中保存的一系列高程值进行分析，取出最终的高程值
-      // 一个平面体素中可能存在很多个点，同时，一个点的高程值会扩散到周围九个平面体素中
+      // 对高分辨率平面体素中保存的一系列高程值进行分析，得到最终的高程值
+      // 一个高分辨率平面体素中可能存在很多个点的高程数据，同时，一个点的高程值会扩散到周围九个高分辨率平面体素中
       if (useSorting) { // 如果对高程值进行排序处理
-        for (int i = 0; i < planarVoxelNum; i++) { // 遍历所有平面体素的数据
-          int planarPointElevSize = planarPointElev[i].size();
+        for (int i = 0; i < planarVoxelNum; i++) { // 遍历所有高分辨率平面体素内的所有高程数据
+          int planarPointElevSize = planarPointElev[i].size(); // 当前高分辨率平面体素的高程值数目
           if (planarPointElevSize > 0) { // 跳过空的体素
             // 对每一个平面体素的高程值进行升序排序
             sort(planarPointElev[i].begin(), planarPointElev[i].end());
             // 计算量化ID
             int quantileID = int(quantileZ * planarPointElevSize);
+            // 异常处理，一般在quantileZ设置不对的时候才会发生 正常范围是(0,1)
             if (quantileID < 0)
               quantileID = 0;
             else if (quantileID >= planarPointElevSize)
@@ -597,7 +615,7 @@ int main(int argc, char **argv) {
         }
       } else { // 如果不对高程值进行排序
         for (int i = 0; i < planarVoxelNum; i++) {
-          int planarPointElevSize = planarPointElev[i].size();
+          int planarPointElevSize = planarPointElev[i].size(); // 当前高分辨率平面体素的高程值数目
           if (planarPointElevSize > 0) {
             float minZ = 1000.0;
             int minID = -1;
@@ -607,7 +625,7 @@ int main(int argc, char **argv) {
                 minID = j;
               }
             }
-            // 选取最低的高程值为最终的平面体素高程值
+            // 选取最低点的高程值作为该高分辨率平面体素最终的高程值
             if (minID != -1) {
               planarVoxelElev[i] = planarPointElev[i][minID];
             }
@@ -620,6 +638,7 @@ int main(int argc, char **argv) {
       for (int i = 0; i < terrainCloudSize; i++) { // 遍历附近5m范围的点云数据
         point = terrainCloud->points[i];
         if (point.z - vehicleZ > minRelZ && point.z - vehicleZ < maxRelZ) {
+          // 计算该点在高分辨率平面体素中的索引
           int indX = int((point.x - vehicleX + planarVoxelSize / 2) /
                          planarVoxelSize) +
                      planarVoxelHalfWidth;
@@ -638,14 +657,14 @@ int main(int argc, char **argv) {
             if (planarVoxelDyObs[planarVoxelWidth * indX + indY] <
                     minDyObsPointNum ||
                 !clearDyObs) {
-              // 当前点的高度值与当前平面体素高程的差
+              // 当前点的高度值与当前高分辨率平面体素高程的差
               float disZ =
                   point.z - planarVoxelElev[planarVoxelWidth * indX + indY];
               if (considerDrop) // 考虑当前点比高程值还低的情况(也就是当做障碍物处理)，如果不开，那么就会忽略掉坑洞，有可能会掉进去...
                 disZ = fabs(disZ);
               int planarPointElevSize =
                   planarPointElev[planarVoxelWidth * indX + indY].size();
-              // 如果当前点的高度差满足要求 且 所处的平面体素至少有minBlockPointNum个高程数据
+              // 如果当前点的高度差满足要求 且 所处的高分辨率平面体素中至少有minBlockPointNum个高程数据(附近点比较密集，可以一定程度上去掉某些噪点)
               if (disZ >= 0 && disZ < vehicleHeight &&
                   planarPointElevSize >= minBlockPointNum) {
                 terrainCloudElev->push_back(point);
@@ -658,8 +677,9 @@ int main(int argc, char **argv) {
         }
       }
 
+      // 如果开启了noDataObstacle 且 机器人运动了一定距离
       if (noDataObstacle && noDataInited == 2) {
-        for (int i = 0; i < planarVoxelNum; i++) { // 遍历附近所有平面体素
+        for (int i = 0; i < planarVoxelNum; i++) { // 遍历所有高分辨率平面体素
           int planarPointElevSize = planarPointElev[i].size();
           if (planarPointElevSize < minBlockPointNum) { // 如果该平面体素内的高程数据少于一定数量，就有可能是一些边缘点？
             planarVoxelEdge[i] = 1; // 应该是为了识别数据稀疏的体素，比如平面边缘或者噪声区域
