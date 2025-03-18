@@ -6,13 +6,13 @@
 
 struct ContourDetectParams {
     ContourDetectParams() = default;
-    float sensor_range;
-    float voxel_dim;
-    float kRatio;
-    int   kThredValue;
-    int   kBlurSize;
-    bool  is_save_img;
-    std::string img_path;
+    float sensor_range; // 传感器范围
+    float voxel_dim;    // 体素直径
+    float kRatio;       // 
+    int   kThredValue;  // 图像二值化的阈值
+    int   kBlurSize;    // 模糊尺寸
+    bool  is_save_img;  // 是否保存轮廓提取图片
+    std::string img_path; // 图片保存的地址
 };
 
 class ContourDetector {
@@ -28,8 +28,8 @@ private:
     std::vector<cv::Vec4i> refined_hierarchy_;
     NavNodePtr odom_node_ptr_;
 
-    int MAT_SIZE, CMAT;
-    int MAT_RESIZE, CMAT_RESIZE;
+    int MAT_SIZE, CMAT;             // 图像矩阵的尺寸/一半尺寸
+    int MAT_RESIZE, CMAT_RESIZE;    // resize后的图像尺寸/一半尺寸
     float DIST_LIMIT;
     float ALIGN_ANGLE_COS;
     float VOXEL_DIM_INV;

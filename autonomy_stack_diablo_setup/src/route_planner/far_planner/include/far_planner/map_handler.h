@@ -131,7 +131,7 @@ public:
 
 private:
     MapHandlerParams map_params_;
-    int neighbor_Lnum_, neighbor_Hnum_;
+    int neighbor_Lnum_, neighbor_Hnum_; // 根据传感器测量范围计算的附近的网格数量(水平与垂直的网格数，不是一半)
     Eigen::Vector3i robot_cell_sub_; // 机器人位置对应的网格索引
     int INFLATE_N;
     bool is_init_ = false;
@@ -168,6 +168,7 @@ private:
         }
     }
 
+    // 计算以 csub 为中心、扩展n个单位的所有二维网格索引
     inline void Expansion2D(const Eigen::Vector3i& csub, std::vector<Eigen::Vector3i>& subs, const int& n) {
         subs.clear();
         for (int ix=-n; ix<=n; ix++) {
@@ -186,17 +187,17 @@ private:
     static std::unordered_set<int> neighbor_obs_indices_;  // surrounding obs cloud grid indices stack
     static std::unordered_set<int> extend_obs_indices_;    // extended surrounding obs cloud grid indices stack
 
-    std::vector<int> global_visited_induces_;
-    std::vector<int> util_obs_modified_list_;
-    std::vector<int> util_free_modified_list_;
+    std::vector<int> global_visited_induces_;   // 地形点云的回调中所有点所在的地图网格的索引列表
+    std::vector<int> util_obs_modified_list_;   // 地形点云的回调中障碍物点所在的地图网格的索引列表
+    std::vector<int> util_free_modified_list_;  // 地形点云的回调中free点所在的地图网格的索引列表
     std::vector<int> util_remove_check_list_;
     static std::vector<int> terrain_grid_occupy_list_;
     static std::vector<int> terrain_grid_traverse_list_;
 
     
-    static std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_free_cloud_grid_;
-    static std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_obs_cloud_grid_;
-    static std::unique_ptr<grid_ns::Grid<std::vector<float>>> terrain_height_grid_;
+    static std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_free_cloud_grid_;    // free点云网格，以第一帧机器人定位为中心
+    static std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_obs_cloud_grid_;     // obs点云网格，以第一帧机器人定位为中心
+    static std::unique_ptr<grid_ns::Grid<std::vector<float>>> terrain_height_grid_; // 地形高度网格，以机器人当前位置为中心，实时更新
  
 };
 

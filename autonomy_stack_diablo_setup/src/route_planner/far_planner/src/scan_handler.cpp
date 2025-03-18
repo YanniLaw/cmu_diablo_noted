@@ -19,7 +19,7 @@ void ScanHandler::Init(const ScanHandlerParams& params) {
     row_num_ = std::ceil(scan_params_.terrain_range * 2.0f / (scan_params_.voxel_size*3));
     if (row_num_ % 2 == 0) row_num_ ++;
     col_num_ = row_num_;
-    level_num_ = std::ceil(scan_params_.ceil_height * 1.2f / (scan_params_.voxel_size*3));
+    level_num_ = std::ceil(scan_params_.ceil_height * 1.2f / (scan_params_.voxel_size*3)); // floor_height
     if (level_num_ % 2 == 0) level_num_ ++;
     Eigen::Vector3i grid_size(row_num_, col_num_, level_num_);
     Eigen::Vector3d grid_origin(0,0,0);
@@ -39,8 +39,8 @@ void ScanHandler::UpdateRobotPosition(const Point3D& robot_pos) {
     grid_origin.x() = robot_pos.x - ((scan_params_.voxel_size*3) * row_num_) / 2.0f;
     grid_origin.y() = robot_pos.y - ((scan_params_.voxel_size*3) * col_num_) / 2.0f;
     grid_origin.z() = robot_pos.z - ((scan_params_.voxel_size*3) * level_num_) / 2.0f;
-    voxel_grids_->SetOrigin(grid_origin);
-    center_sub_ = voxel_grids_->Pos2Sub(Eigen::Vector3d(robot_pos.x, robot_pos.y, robot_pos.z));
+    voxel_grids_->SetOrigin(grid_origin); // 实时更新origin，保持当前机器人位置在网格地图中心，其网格坐标系也跟世界坐标一样方向的
+    center_sub_ = voxel_grids_->Pos2Sub(Eigen::Vector3d(robot_pos.x, robot_pos.y, robot_pos.z)); // 计算机器人所在网格索引
     center_p_ = FARUtil::Point3DToPCLPoint(robot_pos);
 }
 

@@ -4,20 +4,21 @@
 #include "point_struct.h"
 
 enum NodeType {
-    NOT_DEFINED = 0,
-    GROUND      = 1,
-    AIR         = 2
+    NOT_DEFINED = 0,  // 未定义
+    GROUND      = 1,  // 地面节点
+    AIR         = 2   // 空气节点
 };
 
 enum NodeFreeDirect {
-  UNKNOW  =  0,
-  CONVEX  =  1,
-  CONCAVE =  2,
-  PILLAR  =  3
+  UNKNOW  =  0,   // 未知
+  CONVEX  =  1,   // 凸
+  CONCAVE =  2,   // 凹
+  PILLAR  =  3    // 柱
 };
 
 typedef std::pair<Point3D, Point3D> PointPair;
 
+// 激光雷达模型数据
 namespace LiDARMODEL {
     /* array resolution: 1 degree */
     static const int kHorizontalFOV = 360;  
@@ -29,11 +30,11 @@ namespace LiDARMODEL {
 struct Polygon
 {
   Polygon() = default;
-  std::size_t N;
-  std::vector<Point3D> vertices;
-  bool is_robot_inside;
-  bool is_pillar;
-  float perimeter;
+  std::size_t N;  // 多边形顶点数
+  std::vector<Point3D> vertices;  // 各个顶点坐标
+  bool is_robot_inside; // 机器人是否在其中
+  bool is_pillar;       // 是否是柱形
+  float perimeter;      // 周长
 };
 
 typedef std::shared_ptr<Polygon> PolygonPtr;

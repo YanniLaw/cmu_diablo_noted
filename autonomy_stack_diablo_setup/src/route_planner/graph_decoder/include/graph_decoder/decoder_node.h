@@ -37,9 +37,9 @@ enum VizColor {
 
 enum NodeFreeDirect {
   UNKNOW  =  0,
-  CONVEX  =  1,
-  CONCAVE =  2,
-  PILLAR  =  3
+  CONVEX  =  1, // 凸形
+  CONCAVE =  2, // 凹形
+  PILLAR  =  3  // 柱形
 };
 
 struct NavNode {
@@ -87,10 +87,10 @@ public:
 private:
     rclcpp::Node::SharedPtr nh_;
 
-    rclcpp::Subscription<visibility_graph_msg::msg::Graph>::SharedPtr graph_sub_;
+    rclcpp::Subscription<visibility_graph_msg::msg::Graph>::SharedPtr graph_sub_; // 接收来自far planner模块的可视图信息
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr save_graph_sub_, read_graph_sub_;
     rclcpp::Publisher<MarkerArray>::SharedPtr graph_viz_pub_;
-    rclcpp::Publisher<visibility_graph_msg::msg::Graph>::SharedPtr graph_pub_;
+    rclcpp::Publisher<visibility_graph_msg::msg::Graph>::SharedPtr graph_pub_; // 发送给far planner模块
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr request_graph_service_;
 
     GraphDecoderParams gd_params_;

@@ -657,6 +657,7 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
     }
   }
   
+  // 实时更新机器人位置
   robot_pos_.x = tf_odom_pose.getOrigin().x(); 
   robot_pos_.y = tf_odom_pose.getOrigin().y();
   robot_pos_.z = tf_odom_pose.getOrigin().z();
@@ -670,7 +671,7 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
   if (!is_odom_init_) {
     // system start time
     FARUtil::systemStartTime = nh_->now().seconds();
-    FARUtil::map_origin = robot_pos_;
+    FARUtil::map_origin = robot_pos_; // 以第一帧的位置作为map的origin
     map_handler_.UpdateRobotPosition(robot_pos_);
   }
 
@@ -707,38 +708,40 @@ void FARMaster::PrcocessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc,
 
 
 void FARMaster::ScanCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr scan_pc) {
-  if (master_params_.is_static_env || !is_odom_init_) return;
+  if (master_params_.is_static_env || !is_odom_init_) return; // 静态环境不使用scan数据
   this->PrcocessCloud(scan_pc, FARUtil::cur_scan_cloud_);
   scan_handler_.UpdateRobotPosition(robot_pos_);
 }
 
 void FARMaster::TerrainLocalCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr pc) {
-  if (master_params_.is_static_env) return;
+  if (master_params_.is_static_env) return;  // 静态环境不使用地形分析数据
   this->PrcocessCloud(pc, local_terrain_ptr_);
-  FARUtil::ExtractFreeAndObsCloud(local_terrain_ptr_, FARUtil::local_terrain_free_, FARUtil::local_terrain_obs_);
+  FARUtil::ExtractFreeAndObsCloud(local_terrain_ptr_, FARUtil::local_terrain_free_, FARUtil::local_terrain_obs_); //TODO 发布出来看看效果
 }
 
 void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr pc) {
   if (!is_odom_init_) return;
   // update map grid robot center
   map_handler_.UpdateRobotPosition(FARUtil::robot_pos);
-  if (!is_stop_update_) {
+  if (!is_stop_update_) { // 更新可视图
     this->PrcocessCloud(pc, temp_cloud_ptr_);
-    // 提取机器人附近点云
+    // 提取机器人附近地形分析点云数据
     FARUtil::CropBoxCloud(temp_cloud_ptr_, robot_pos_, Point3D(master_params_.terrain_range,
                                                                master_params_.terrain_range,
                                                                FARUtil::kTolerZ));
-    // 按高程值对点云进行分类提取
+    // 按高程值对地形分析点云进行分类提取
     FARUtil::ExtractFreeAndObsCloud(temp_cloud_ptr_, temp_free_ptr_, temp_obs_ptr_);
-    // 在动态环境中，去除重叠的障碍物点云(对当前的障碍物点云进行处理，原地操作保存在temp_obs_ptr_中)
+    // 在动态环境中，去除重叠的障碍物点云(只对当前提取出来的障碍物点云进行处理，原地操作保存在temp_obs_ptr_中)
+    // 去除temp_obs_ptr_中与stack_dyobs_cloud_存在重叠的点(扣掉这些点)，这里temp_obs_ptr_的Intensity属性被修改了255
     if (!master_params_.is_static_env) {
       FARUtil::RemoveOverlapCloud(temp_obs_ptr_, FARUtil::stack_dyobs_cloud_, true);
     }
     map_handler_.UpdateObsCloudGrid(temp_obs_ptr_);
     map_handler_.UpdateFreeCloudGrid(temp_free_ptr_);
     // extract new points
-    FARUtil::ExtractNewObsPointCloud(temp_obs_ptr_,
-                                     FARUtil::surround_obs_cloud_,
+    // 提取新出现的障碍物点云(去掉temp_obs_ptr_中跟surround_obs_cloud_重合的点，存放在cur_new_cloud_中)
+    FARUtil::ExtractNewObsPointCloud(temp_obs_ptr_, // 0 属性做了修改
+                                     FARUtil::surround_obs_cloud_, // 255
                                      FARUtil::cur_new_cloud_); // 与surround_obs_cloud_拼接后 再进行滤波
   } else { // stop env update
     temp_cloud_ptr_->clear();
@@ -855,7 +858,7 @@ float   FARUtil::kMarginDist;
 float   FARUtil::kMarginHeight;
 float   FARUtil::kTerrainRange;
 float   FARUtil::kLocalPlanRange;
-float   FARUtil::kFreeZ;
+float   FARUtil::kFreeZ; // terrain_free_Z 区分障碍物的高程值阈值
 float   FARUtil::kVizRatio;
 double  FARUtil::systemStartTime; // 系统开始的时间(用里程计数据初始化)
 float   FARUtil::kObsDecayTime;
@@ -905,7 +908,7 @@ std::unique_ptr<grid_ns::Grid<std::vector<float>>> MapHandler::terrain_height_gr
 
 int main(int argc, char** argv){
   rclcpp::init(argc, argv);
-  
+  // 单线程节点
   auto far_planner_node = std::make_shared<FARMaster>();
   far_planner_node->Init();
   rclcpp::spin(far_planner_node->GetNodeHandle());

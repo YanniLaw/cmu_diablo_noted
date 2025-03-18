@@ -50,7 +50,7 @@ Point3D last_planning_odom_;
 
 // local terrain map for freespace adjustment
 Point3D grid_center_ = Point3D(0,0,0);
-std::unique_ptr<grid_ns::Grid<char>> free_terrain_grid_;
+std::unique_ptr<grid_ns::Grid<char>> free_terrain_grid_; // 自由地形网格 
 
 float PriorityScore(const NavNodePtr& node_ptr);
 

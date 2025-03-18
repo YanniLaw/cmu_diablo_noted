@@ -20,6 +20,7 @@
 
 namespace grid_ns
 {
+/* 网格模板类 */
 template <typename _T>
 class Grid
 {
@@ -115,12 +116,14 @@ public:
     return ind >= 0 && ind < cell_number_;
   }
 
+  // 一维索引转换到三维索引
   Eigen::Vector3i Ind2Sub(int ind) const
   {
     // MY_ASSERT(InRange(ind));
     return subs_[ind];
   }
 
+  // 三维索引转换为一维索引
   int Sub2Ind(int x, int y, int z) const
   {
     return x + (y * size_.x()) + (z * size_.x() * size_.y());
@@ -132,21 +135,24 @@ public:
     return Sub2Ind(sub.x(), sub.y(), sub.z());
   }
 
+  // 根据三维索引计算实际物理位置
   Eigen::Vector3d Sub2Pos(int x, int y, int z) const
   {
     return Sub2Pos(Eigen::Vector3i(x, y, z));
   }
 
+  // 根据三维索引计算实际物理位置
   Eigen::Vector3d Sub2Pos(const Eigen::Vector3i& sub) const
   {
     Eigen::Vector3d pos(0, 0, 0);
     for (int i = 0; i < dimension_; i++)
     {
-      pos(i) = origin_(i) + sub(i) * resolution_(i) + resolution_(i) / 2.0;
+      pos(i) = origin_(i) + sub(i) * resolution_(i) + resolution_(i) / 2.0; // 加上半个栅格的偏移(坐标是基于栅格中心的)
     }
     return pos;
   }
 
+  // 根据一维索引计算实际物理位置
   Eigen::Vector3d Ind2Pos(int ind) const
   {
     // MY_ASSERT(InRange(ind));
@@ -173,11 +179,13 @@ public:
     return Sub2Ind(Pos2Sub(pos));
   }
 
+  // 获取栅格引用
   _T& GetCell(int x, int y, int z)
   {
     return GetCell(Eigen::Vector3i(x, y, z));
   }
 
+  // 获取栅格引用
   _T& GetCell(const Eigen::Vector3i& sub)
   {
     // MY_ASSERT(InRange(sub));
@@ -185,12 +193,14 @@ public:
     return cells_[index];
   }
 
+  // 获取栅格引用
   _T& GetCell(int index)
   {
     // MY_ASSERT(InRange(index));
     return cells_[index];
   }
 
+   // 获取栅存储的值
   _T GetCellValue(int x, int y, int z) const
   {
     int index = Sub2Ind(x, y, z);
@@ -227,6 +237,7 @@ public:
     cells_[index] = value;
   }
 
+  //  三维 Bresenham 算法
   void RayTraceSubs(const Eigen::Vector3i& start_sub, 
                     const Eigen::Vector3i& end_sub,
                     std::vector<Eigen::Vector3i>& subs)
@@ -285,14 +296,14 @@ public:
   }
 
 private:
-  Eigen::Vector3d origin_;
-  Eigen::Vector3i size_;
-  Eigen::Vector3d resolution_;
+  Eigen::Vector3d origin_; // 网格的原点坐标
+  Eigen::Vector3i size_;   // 网格尺寸(长宽高)
+  Eigen::Vector3d resolution_; // 网格的分辨率
   Eigen::Vector3d resolution_inv_;
-  std::vector<_T> cells_;
-  std::vector<Eigen::Vector3i> subs_;
-  int cell_number_;
-  int dimension_;
+  std::vector<_T> cells_;   // 网格数组，真正存储数据的地方 堆叠顺序，x,y,z
+  std::vector<Eigen::Vector3i> subs_; // 网格真正存储数据的数组的一维索引与网格三维索引的对应表
+  int cell_number_; // 网格数量
+  int dimension_;   // 网格维度
 
   // 一维索引转换为三维索引
   Eigen::Vector3i ind2sub_(int ind) const

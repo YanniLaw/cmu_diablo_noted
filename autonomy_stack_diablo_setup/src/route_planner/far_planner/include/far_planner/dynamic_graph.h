@@ -22,7 +22,7 @@ struct DynamicGraphParams {
 class DynamicGraph {  
 private:
     rclcpp::Node::SharedPtr nh_;
-    Point3D robot_pos_;
+    Point3D robot_pos_;  // 机器人实时位置
     NavNodePtr odom_node_ptr_     = NULL;
     NavNodePtr cur_internav_ptr_  = NULL;
     NavNodePtr last_internav_ptr_ = NULL;

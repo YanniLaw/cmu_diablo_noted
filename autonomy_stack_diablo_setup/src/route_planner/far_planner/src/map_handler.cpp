@@ -26,7 +26,8 @@ void MapHandler::Init(const MapHandlerParams& params) {
     Eigen::Vector3d pointcloud_grid_origin(0,0,0);
     Eigen::Vector3d pointcloud_grid_resolution(map_params_.cell_length, map_params_.cell_length, map_params_.cell_height); // 点云网格分辨率
     PointCloudPtr cloud_ptr_tmp;
-    // 这里的世界障碍物网格或者空闲网格 其实就是一个个的体素(长宽相同，高度不同)
+    // 这里的世界障碍物点云网格或者空闲点云网格 其实就是一个个的体素(长宽相同，高度不同)
+    // 每个网格里面存放的就是点云数据
     world_obs_cloud_grid_ = std::make_unique<grid_ns::Grid<PointCloudPtr>>(
         pointcloud_grid_size, cloud_ptr_tmp, pointcloud_grid_origin, pointcloud_grid_resolution, 3);
 
@@ -46,7 +47,7 @@ void MapHandler::Init(const MapHandlerParams& params) {
     std::fill(util_remove_check_list_.begin(), util_remove_check_list_.end(), 0);
 
     // init terrain height map 初始化地形高度地图
-    // 先计算地形高度地图的尺寸(用传感器测量范围除以机器人的直径)，即得到多少个以机器人直径为长度的格子
+    // 先计算地形高度网格地图的尺寸(用传感器测量范围除以机器人的直径)，即得到多少个以机器人直径为长度的格子
     int height_dim = std::ceil((map_params_.sensor_range + map_params_.cell_length) * 2.0f / FARUtil::robot_dim);
     if (height_dim % 2 == 0) height_dim ++; // 保持为奇数
     Eigen::Vector3i height_grid_size(height_dim, height_dim, 1);
@@ -62,8 +63,8 @@ void MapHandler::Init(const MapHandlerParams& params) {
     std::fill(terrain_grid_traverse_list_.begin(), terrain_grid_traverse_list_.end(), 0);
 
     INFLATE_N = 1;
-    flat_terrain_cloud_    = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
-    kdtree_terrain_clould_ = PointKdTreePtr(new pcl::KdTreeFLANN<PCLPoint>());
+    flat_terrain_cloud_    = PointCloudPtr(new pcl::PointCloud<PCLPoint>()); // 平坦地形点云
+    kdtree_terrain_clould_ = PointKdTreePtr(new pcl::KdTreeFLANN<PCLPoint>()); // kd树地的形点云
     kdtree_terrain_clould_->setSortedResults(false); // 配置最近邻搜索结果不用进行排序
 }
 
@@ -129,12 +130,15 @@ void MapHandler::GetCloudOfPoint(const Point3D& center,
 }
 
 // 以输入的位姿为地图网格的中心，设置两个世界地图网格的origin(立方体左下角所处世界坐标)
+// 从这里可以看出来，网格坐标的x,y,z方向跟map坐标系是保持一致的
 void MapHandler::SetMapOrigin(const Point3D& ori_robot_pos) {
     Point3D map_origin;
-    const Eigen::Vector3i dim = world_obs_cloud_grid_->GetSize();
+    const Eigen::Vector3i dim = world_obs_cloud_grid_->GetSize(); // 获取每个维度的网格数量
+    // 计算左下角网格的物理位置，也就是origin
     map_origin.x = ori_robot_pos.x - (map_params_.cell_length * dim.x()) / 2.0f;
     map_origin.y = ori_robot_pos.y - (map_params_.cell_length * dim.y()) / 2.0f;
     map_origin.z = ori_robot_pos.z - (map_params_.cell_height * dim.z()) / 2.0f - FARUtil::vehicle_height; // From Ground Level
+    // 这里z值减去vehicle_height是因为机器人是以从地面高度作为地图中心的，而不是雷达高度
     Eigen::Vector3d pointcloud_grid_origin(map_origin.x, map_origin.y, map_origin.z);
     world_obs_cloud_grid_->SetOrigin(pointcloud_grid_origin);
     world_free_cloud_grid_->SetOrigin(pointcloud_grid_origin);
@@ -156,7 +160,7 @@ void MapHandler::UpdateRobotPosition(const Point3D& odom_pos) {
         neighbor_sub.x() = robot_cell_sub_.x() + i;
         for (int j = -N; j <= N; j++) {
             neighbor_sub.y() = robot_cell_sub_.y() + j;
-            // additional terrain points -1
+            // additional terrain points -1 // TODO: WHY THIS？
             neighbor_sub.z() = robot_cell_sub_.z() - H - 1;
             if (world_obs_cloud_grid_->InRange(neighbor_sub)) {
                 int ind = world_obs_cloud_grid_->Sub2Ind(neighbor_sub);
@@ -174,10 +178,11 @@ void MapHandler::UpdateRobotPosition(const Point3D& odom_pos) {
     this->SetTerrainHeightGridOrigin(odom_pos); // 实时更新地形高度地图的origin位置
 }
 
+// 设置地形高度网格地图的原点，使得当前机器人处于网格地图最中心
 void MapHandler::SetTerrainHeightGridOrigin(const Point3D& robot_pos) {
     // update terrain height grid center
-    const Eigen::Vector3d res = terrain_height_grid_->GetResolution();
-    const Eigen::Vector3i dim = terrain_height_grid_->GetSize();
+    const Eigen::Vector3d res = terrain_height_grid_->GetResolution();  // 网格分辨率 [robot_dim, robot_dim, leaf_size]
+    const Eigen::Vector3i dim = terrain_height_grid_->GetSize();        // 每个维度的网格数量
     Eigen::Vector3d grid_origin;
     grid_origin.x() = robot_pos.x - (res.x() * dim.x()) / 2.0f;
     grid_origin.y() = robot_pos.y - (res.y() * dim.y()) / 2.0f;
@@ -203,7 +208,7 @@ void MapHandler::GetSurroundFreeCloud(const PointCloudPtr& freeCloudOut) {
     }
 }
 
-// 更新障碍物点云网格
+// 更新障碍物点云网格(提取obsCloudInOut中处于机器人附近的点)
 void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
     if (!is_init_ || obsCloudInOut->empty()) return;
     // 先将网格索引列表的元素都置零
@@ -214,12 +219,12 @@ void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
         Eigen::Vector3i sub = world_obs_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!world_obs_cloud_grid_->InRange(sub)) continue;
         const int ind = world_obs_cloud_grid_->Sub2Ind(sub); // 转换为一维索引
-        // 如果该索引在机器人周围的索引列表范围内
+        // 如果该索引在机器人周围的索引列表范围内(这个索引列表是实时更新的)
         if (neighbor_obs_indices_.find(ind) != neighbor_obs_indices_.end()) {
-            world_obs_cloud_grid_->GetCell(ind)->points.push_back(point); // 将该有效点添加进网格的点云中
+            world_obs_cloud_grid_->GetCell(ind)->points.push_back(point); // 将该有效点添加进网格的障碍物点云中
             obs_valid_ptr->points.push_back(point);
-            util_obs_modified_list_[ind] = 1;
-            global_visited_induces_[ind] = 1;
+            util_obs_modified_list_[ind] = 1;   // obs网格索引
+            global_visited_induces_[ind] = 1;   // 更新全局访问索引
         }
     }
     *obsCloudInOut = *obs_valid_ptr;
@@ -239,7 +244,7 @@ void MapHandler::UpdateFreeCloudGrid(const PointCloudPtr& freeCloudIn){
         const int ind = world_free_cloud_grid_->Sub2Ind(sub);
         world_free_cloud_grid_->GetCell(ind)->points.push_back(point);
         util_free_modified_list_[ind] = 1;
-        global_visited_induces_[ind]  = 1;
+        global_visited_induces_[ind]  = 1;  // 更新全局访问索引
     }
     // Filter Modified Ceils
     for (int i = 0; i < world_free_cloud_grid_->GetCellNumber(); ++i) {
@@ -401,26 +406,28 @@ void MapHandler::ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_o
 void MapHandler::UpdateTerrainHeightGrid(const PointCloudPtr& freeCloudIn, const PointCloudPtr& terrainHeightOut) {
     if (freeCloudIn->empty()) return;
     PointCloudPtr copy_free_ptr(new pcl::PointCloud<PCLPoint>());
-    pcl::copyPointCloud(*freeCloudIn, *copy_free_ptr);
-    FARUtil::FilterCloud(copy_free_ptr, terrain_height_grid_->GetResolution());
-    std::fill(terrain_grid_occupy_list_.begin(), terrain_grid_occupy_list_.end(), 0);
+    pcl::copyPointCloud(*freeCloudIn, *copy_free_ptr); // 拷贝点云
+    FARUtil::FilterCloud(copy_free_ptr, terrain_height_grid_->GetResolution()); // [robot_dim,robot_dim, leaf_size]
+    std::fill(terrain_grid_occupy_list_.begin(), terrain_grid_occupy_list_.end(), 0); // 先置0，每轮都重新计算
+    // 这里的方法类似于terrian analysis中的高程计算，在一个网格中放入多个点的z值
     for (const auto& point : copy_free_ptr->points) {
+        // 先计算该free点在地形高度网格中的对应索引
         Eigen::Vector3i csub = terrain_height_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, 0.0f));
         std::vector<Eigen::Vector3i> subs;
-        this->Expansion2D(csub, subs, INFLATE_N);
+        this->Expansion2D(csub, subs, INFLATE_N); // 扩展当前索引(膨胀)
         for (const auto& sub : subs) {
             if (!terrain_height_grid_->InRange(sub)) continue;
             const int ind = terrain_height_grid_->Sub2Ind(sub);
-            if (terrain_grid_occupy_list_[ind] == 0) {
+            if (terrain_grid_occupy_list_[ind] == 0) { // 首次访问该网格
                 terrain_height_grid_->GetCell(ind).resize(1);
-                terrain_height_grid_->GetCell(ind)[0] = point.z;
+                terrain_height_grid_->GetCell(ind)[0] = point.z; // 高程值，并非传统的z坐标值
             } else {
                 terrain_height_grid_->GetCell(ind).push_back(point.z);
             }
-            terrain_grid_occupy_list_[ind] = 1;
+            terrain_grid_occupy_list_[ind] = 1; // 只要赋值为1，就表示该index在本轮更新地形高程网格过程中有free point
         }
     }
-    this->TraversableAnalysis(terrainHeightOut);
+    this->TraversableAnalysis(terrainHeightOut); // 可通行性分析
     if (terrainHeightOut->empty()) { // set terrain height kdtree
         FARUtil::ClearKdTree(flat_terrain_cloud_, kdtree_terrain_clould_);
     } else {
@@ -432,18 +439,19 @@ void MapHandler::UpdateTerrainHeightGrid(const PointCloudPtr& freeCloudIn, const
 }
 
 void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
+    // 获取机器人当前位置在地形高程网格中索引
     const Eigen::Vector3i robot_sub = terrain_height_grid_->Pos2Sub(Eigen::Vector3d(FARUtil::robot_pos.x, 
                                                                                     FARUtil::robot_pos.y, 0.0f));
     terrainHeightOut->clear();
-    if (!terrain_height_grid_->InRange(robot_sub)) {
+    if (!terrain_height_grid_->InRange(robot_sub)) { // 机器人超出网格边界
         std::cout << "MH: terrain height analysis error: robot position is not in range" << std::endl;
         return;
     }
-    const float H_THRED = map_params_.height_voxel_dim;
-    std::fill(terrain_grid_traverse_list_.begin(), terrain_grid_traverse_list_.end(), 0);
+    const float H_THRED = map_params_.height_voxel_dim; // voxel_dim * 2.0 高度变化阈值
+    std::fill(terrain_grid_traverse_list_.begin(), terrain_grid_traverse_list_.end(), 0); // 可通行网格列表，先置0
     // Lambda Function
     auto IsTraversableNeighbor = [&] (const int& cur_id, const int& ref_id) {
-        if (terrain_grid_occupy_list_[ref_id] == 0) return false;
+        if (terrain_grid_occupy_list_[ref_id] == 0) return false; // 已经添加过了
         const float cur_h = terrain_height_grid_->GetCell(cur_id)[0];
         float ref_h = 0.0f;
         int counter = 0;
@@ -458,53 +466,58 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
         }
         return false;
     };
-
+    // 添加索引到可通行网格列表中
     auto AddTraversePoint = [&] (const int& idx) {
         Eigen::Vector3d cpos = terrain_height_grid_->Ind2Pos(idx);
-        cpos.z() = terrain_height_grid_->GetCell(idx)[0];
+        cpos.z() = terrain_height_grid_->GetCell(idx)[0]; // 为什么是添加网格第一个高程值？？
         const PCLPoint p = FARUtil::Point3DToPCLPoint(Point3D(cpos));
         terrainHeightOut->points.push_back(p);
         terrain_grid_traverse_list_[idx] = 1;
     };
 
-    const int robot_idx = terrain_height_grid_->Sub2Ind(robot_sub);
+    const int robot_idx = terrain_height_grid_->Sub2Ind(robot_sub); // 当前机器人位置所在地形高度网格中的索引
     const std::array<int, 4> dx = {-1, 0, 1, 0};
     const std::array<int, 4> dy = { 0, 1, 0,-1};
     std::deque<int> q;
     bool is_robot_terrain_init = false;
     std::unordered_set<int> visited_set;
     q.push_back(robot_idx), visited_set.insert(robot_idx);
+    // BFS
     while (!q.empty()) {
         const int cur_id = q.front();
         q.pop_front();
-        if (terrain_grid_occupy_list_[cur_id] != 0) {
+        // 一般机器人位置所在的网格以及周围一些网格都是没有地形数据的(因为lidar存在盲区，就算有也不准确)
+        if (terrain_grid_occupy_list_[cur_id] != 0) { // 有地形数据(本轮free point 所在的网格)
             if (!is_robot_terrain_init) {
                 float avg_h = 0.0f;
                 int counter = 0;
-                for (const auto& e : terrain_height_grid_->GetCell(cur_id)) {
+                for (const auto& e : terrain_height_grid_->GetCell(cur_id)) { // 一个网格里面可能有很多高程值
                     if (abs(e - FARUtil::robot_pos.z + FARUtil::vehicle_height) > H_THRED) continue;
                     avg_h += e, counter ++;
                 }
                 if (counter > 0) {
-                    avg_h /= (float)counter;
+                    avg_h /= (float)counter; // 没有对该值进行检查，这里默认是机器人周围就是地面！！！ //TODO
                     terrain_height_grid_->GetCell(cur_id).resize(1);
                     terrain_height_grid_->GetCell(cur_id)[0] = avg_h;
                     AddTraversePoint(cur_id);
                     is_robot_terrain_init = true; // init terrain height map current robot height
-                    q.clear();
+                    q.clear(); // 初始化成功，清除队列，以该索引为中心重新进行传播
                 }
-            } else {
+            } else { // 初始化成功直接添加
                 AddTraversePoint(cur_id);
             }
-        } else if (is_robot_terrain_init) {
+        } else if (is_robot_terrain_init) { // 没有free地形数据，且地形已经初始化了，那么就不继续拓展了
             continue;
         }
         const Eigen::Vector3i csub = terrain_height_grid_->Ind2Sub(cur_id);
-        for (int i=0; i<4; i++) {
+        for (int i=0; i<4; i++) { // 四邻域
             Eigen::Vector3i ref_sub = csub;
             ref_sub.x() += dx[i], ref_sub.y() += dy[i];
             if (!terrain_height_grid_->InRange(ref_sub)) continue;
             const int ref_id = terrain_height_grid_->Sub2Ind(ref_sub);
+            // 两种情况下扩展搜索网格节点: 1. 网格没有被遍历过; 2. 地形高度还未被初始化 或者 下个节点是可通行的
+            // 地形高度还未被初始化(!is_robot_terrain_init) 这种情况是刚开始搜索时，机器人网格附近都没有数据
+            // 地形高度初始化后，则根据后面IsTraversableNeighbor 来进行判断是否要将邻域节点加入到队列中进行传播
             if (!visited_set.count(ref_id) && (!is_robot_terrain_init || IsTraversableNeighbor(cur_id, ref_id))) {
                 q.push_back(ref_id);
                 visited_set.insert(ref_id);

@@ -51,18 +51,19 @@ PCLPoint FARUtil::Point3DToPCLPoint(const Point3D& point) {
   return pcl_point;
 }
 
+// 去掉cloudIn中跟cloudRefer重合的点，最后存放在cloudNew中，参考 RemoveOverlapCloud 函数
 void FARUtil::ExtractNewObsPointCloud(const PointCloudPtr& cloudIn,
                                       const PointCloudPtr& cloudRefer,
                                       const PointCloudPtr& cloudNew)
 {
   PointCloudPtr temp_new_cloud(new pcl::PointCloud<PCLPoint>());
-  FARUtil::ResetCloudIntensity(cloudIn, false);
-  FARUtil::ResetCloudIntensity(cloudRefer, true);
+  FARUtil::ResetCloudIntensity(cloudIn, false);   // 0
+  FARUtil::ResetCloudIntensity(cloudRefer, true); // 255
   cloudNew->clear(), temp_new_cloud->clear();
   *temp_new_cloud = *cloudIn + *cloudRefer;
   FARUtil::FilterCloud(temp_new_cloud, FARUtil::kLeafSize * 2.0);
   for (const auto& p : temp_new_cloud->points) {
-    if (p.intensity < FARUtil::kNewPIThred) {
+    if (p.intensity < FARUtil::kNewPIThred) { // new_intensity_thred 参数
       cloudNew->points.push_back(p);
     } 
   }
@@ -216,7 +217,7 @@ void FARUtil::ExtractFreeAndObsCloud(const PointCloudPtr& newCloudIn,
   std::size_t obs_idx = 0;
   // iteratte through points
   for (const auto& p : newCloudIn->points) {
-    if (p.intensity < FARUtil::kFreeZ) {
+    if (p.intensity < FARUtil::kFreeZ) { // terrain_free_Z 参数
       freeCloudOut->points[free_idx] = p;
       free_idx ++;
     } else {
@@ -505,11 +506,11 @@ void FARUtil::ExtractOverlapCloud(const PointCloudPtr& cloudIn,
 }
 
 /**
- * @brief 去除重叠的障碍物点云
+ * @brief 去除cloudInOut中与cloudRef重叠的点云
  * 
- * @param cloudInOut 输入的障碍物点云
- * @param cloudRef   已有的障碍物点云
- * @param is_copy_cloud 是否拷贝点云数据
+ * @param cloudInOut 输入输出的点云 Intensity属性被更改了
+ * @param cloudRef   参考点云
+ * @param is_copy_cloud 是否拷贝点云数据(其实就是是否改变cloudRef数据)
  */
 void FARUtil::RemoveOverlapCloud(const PointCloudPtr& cloudInOut,
                                  const PointCloudPtr& cloudRef,
@@ -520,7 +521,7 @@ void FARUtil::RemoveOverlapCloud(const PointCloudPtr& cloudInOut,
   PointCloudPtr ref_cloud = cloudRef;
   if (is_copy_cloud) {
     PointCloudPtr copyRefCloud(new pcl::PointCloud<PCLPoint>());
-    pcl::copyPointCloud(*cloudRef, *copyRefCloud);
+    pcl::copyPointCloud(*cloudRef, *copyRefCloud); // 复制点云数据
     ref_cloud = copyRefCloud;
   }
   FARUtil::ResetCloudIntensity(cloudInOut, true); // 255 
@@ -531,8 +532,8 @@ void FARUtil::RemoveOverlapCloud(const PointCloudPtr& cloudInOut,
   cloudInOut->clear(), cloudInOut->resize(temp_cloud->size());
   std::size_t idx = 0;
   for (const auto& p : temp_cloud->points) {
-    if (p.intensity < 255.0) continue;
-    cloudInOut->points[idx] = p;
+    if (p.intensity < 255.0) continue; // 此时该点属于cloudRef
+    cloudInOut->points[idx] = p; // 只保留cloudInOut中的点
     idx++;
   }
   cloudInOut->resize(idx);
@@ -718,7 +719,7 @@ void FARUtil::ConvertCTNodeStackToPCL(const CTNodeStack& ctnode_stack,
   }
 }
 
-// 实现基于包围盒的点云裁剪
+// 实现基于AABB(轴对齐)包围盒的点云裁剪
 void FARUtil::CropBoxCloud(const PointCloudPtr& cloudInOut, 
                           const Point3D& center_p, 
                           const Point3D& crop_size) 

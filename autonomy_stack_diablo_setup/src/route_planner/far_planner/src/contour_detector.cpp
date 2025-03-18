@@ -15,9 +15,10 @@ void ContourDetector::Init(const ContourDetectParams& params) {
     /* Allocate Pointcloud pointer memory */
     new_corners_cloud_   = PointCloudPtr(new pcl::PointCloud<PCLPoint>());
     // Init projection cv Mat
+    // 以传感器测量范围为一半边长的图像
     MAT_SIZE = std::ceil(cd_params_.sensor_range * 2.0f / cd_params_.voxel_dim);
     if (MAT_SIZE % 2 == 0) MAT_SIZE ++;
-    MAT_RESIZE = MAT_SIZE * (int)cd_params_.kRatio;
+    MAT_RESIZE = MAT_SIZE * (int)cd_params_.kRatio; // 3.0
     CMAT = MAT_SIZE / 2, CMAT_RESIZE = MAT_RESIZE / 2;
     img_mat_ = cv::Mat::zeros(MAT_SIZE, MAT_SIZE, CV_32FC1);
     img_counter_ = 0;

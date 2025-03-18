@@ -47,14 +47,14 @@ public:
 
 private:
     ScanHandlerParams scan_params_;
-    Eigen::Vector3i center_sub_;
+    Eigen::Vector3i center_sub_; // 机器人当前位置所在的网格索引
     int row_num_, col_num_, level_num_;
     bool is_grids_init_ = false;
-    PCLPoint center_p_; // scan中心位置，也就是机器人中心坐标
+    PCLPoint center_p_; // scan中心位置，也就是机器人当前位置 (pcl格式，方便与pcl函数进行运算)
     // Set resolution for Velodyne LiDAR PUCK: https://www.amtechs.co.jp/product/VLP-16-Puck.pdf
     const float ANG_RES_Y = 2.0f/180.0f * M_PI; // vertical resolution 2 degree
     const float ANG_RES_X = 0.5f/180.0f * M_PI; // horizontal resolution 0.5 degree
-    std::unique_ptr<grid_ns::Grid<char>> voxel_grids_;
+    std::unique_ptr<grid_ns::Grid<char>> voxel_grids_; // 体素网格，三倍的分辨率，这个网格也是以机器人的实时位置为中心的
 
     void SetMapOrigin(const Point3D& ori_robot_pos);
     void SetRayCloud(const Eigen::Vector3i& point_sub);
