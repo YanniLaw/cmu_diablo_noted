@@ -13,21 +13,21 @@
 void DynamicGraph::Init(const rclcpp::Node::SharedPtr nh, const DynamicGraphParams& params) {
     nh_ = nh;
     dg_params_ = params;
-    CONNECT_ANGLE_COS = cos(dg_params_.kConnectAngleThred);
-    NOISE_ANGLE_COS = cos(FARUtil::kAngleNoise);
+    CONNECT_ANGLE_COS = cos(dg_params_.kConnectAngleThred); // connect_angle_thred 参数 默认10，并未在参数文件里写 
+    NOISE_ANGLE_COS = cos(FARUtil::kAngleNoise);            // angle_noise
     id_tracker_     = 1;
     last_connect_pos_ = Point3D(0,0,0);
     /* Initialize Terrian Planner */
     tp_params_.world_frame  = FARUtil::worldFrameId;
-    tp_params_.voxel_size   = FARUtil::kLeafSize;
-    tp_params_.radius       = FARUtil::kNearDist * 2.0f;
-    tp_params_.inflate_size = FARUtil::kObsInflate;
+    tp_params_.voxel_size   = FARUtil::kLeafSize;           // voxel_dim 参数
+    tp_params_.radius       = FARUtil::kNearDist * 2.0f;    // robot_dim 参数
+    tp_params_.inflate_size = FARUtil::kObsInflate;         // obs_inflate_size 参数
     terrain_planner_.Init(nh, tp_params_);
 }
 
 void DynamicGraph::UpdateRobotPosition(const Point3D& robot_pos) {
     robot_pos_ = robot_pos;
-    terrain_planner_.SetLocalTerrainObsCloud(FARUtil::local_terrain_obs_);
+    terrain_planner_.SetLocalTerrainObsCloud(FARUtil::local_terrain_obs_); // 设置局部地形障碍物点云
     if (odom_node_ptr_ == NULL) {
         this->CreateNavNodeFromPoint(robot_pos_, odom_node_ptr_, true);
         this->AddNodeToGraph(odom_node_ptr_);

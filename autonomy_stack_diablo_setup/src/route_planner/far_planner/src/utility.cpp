@@ -416,6 +416,14 @@ Point3D FARUtil::SurfTopoDirect(const PointPair& dirs) {
   return FARUtil::SurfTopoDirect(dirs, UNUSE_iswall);
 }
 
+/**
+ * @brief 对输入点云进行膨胀（Inflation），即在每个障碍物点周围生成额外的点，扩大障碍物的影响范围
+ * 
+ * @param obsCloudInOut 输入的障碍物点云
+ * @param resol 膨胀的步长
+ * @param inflate_size 膨胀尺度
+ * @param deep_z_inflate 是否在 z 轴方向进行更深的扩展
+ */
 void FARUtil::InflateCloud(const PointCloudPtr& obsCloudInOut, 
                            const float& resol,
                            const int& inflate_size,
@@ -442,7 +450,7 @@ void FARUtil::InflateCloud(const PointCloudPtr& obsCloudInOut,
       }
     }
   }
-  obsCloudInOut->resize(cur_idx);
+  obsCloudInOut->resize(cur_idx); // 裁剪多余的空间
   FARUtil::FilterCloud(obsCloudInOut, resol);
 }
 
@@ -539,6 +547,7 @@ void FARUtil::RemoveOverlapCloud(const PointCloudPtr& cloudInOut,
   cloudInOut->resize(idx);
 }
 
+// 根据时间堆叠点云数据，并移除超时的点
 void FARUtil::StackCloudByTime(const PointCloudPtr& curInCloud,
                               const PointCloudPtr& StackCloud,
                               const float& duration,
@@ -546,13 +555,13 @@ void FARUtil::StackCloudByTime(const PointCloudPtr& curInCloud,
 {
   pcl::PointIndices::Ptr outliers(new pcl::PointIndices());
   outliers->indices.resize(StackCloud->size());
-  FARUtil::ResetCloudIntensityWithTime(curInCloud, nh);
-  *StackCloud += *curInCloud;
+  FARUtil::ResetCloudIntensityWithTime(curInCloud, nh); // 用相对时间标记Intensity属性 
+  *StackCloud += *curInCloud; // 点云拼接
   std::size_t idx = 0;
   std::size_t outIdx = 0;
   const float curTime = nh->now().seconds() - FARUtil::systemStartTime;
   for (const auto& pcl_p : StackCloud->points) {
-    if (curTime - pcl_p.intensity > duration) {
+    if (curTime - pcl_p.intensity > duration) { // 超时的点
       outliers->indices[outIdx] = idx;
       outIdx ++;
     }
@@ -562,12 +571,13 @@ void FARUtil::StackCloudByTime(const PointCloudPtr& curInCloud,
   FARUtil::RemoveIndicesFromCloud(outliers, StackCloud);
 }
 
+// 从点云中移除指定索引的点
 void FARUtil::RemoveIndicesFromCloud(const pcl::PointIndices::Ptr& outliers,
                                     const PointCloudPtr& cloudInOut) {
   pcl::ExtractIndices<PCLPoint> extract;
   extract.setInputCloud(cloudInOut);
   extract.setIndices(outliers);
-  extract.setNegative(true);
+  extract.setNegative(true); // 改为false 表示提取指定索引的点
   extract.filter(*cloudInOut);
 }
 

@@ -123,7 +123,7 @@ public:
     static PointCloudPtr surround_obs_cloud_;   // surround obstacle cloud
     static PointCloudPtr surround_free_cloud_;  // surround free space cloud
     static PointCloudPtr stack_new_cloud_;      // new obstacle points cloud      
-    static PointCloudPtr stack_dyobs_cloud_;    // 动态障碍物点云
+    static PointCloudPtr stack_dyobs_cloud_;    // 有时间记忆的动态障碍物点云
     static PointCloudPtr cur_new_cloud_;        // 当前提取出的新的障碍物点云
     static PointCloudPtr cur_dyobs_cloud_;
     static PointCloudPtr cur_scan_cloud_;

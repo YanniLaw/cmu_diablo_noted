@@ -12,7 +12,7 @@
 void TerrainPlanner::Init(const rclcpp::Node::SharedPtr nh, const TerrainPlannerParams& params) {
     nh_ = nh;
     tp_params_ = params;
-    row_num_ = std::ceil((FARUtil::kLocalPlanRange + tp_params_.radius) * 2.0f / tp_params_.voxel_size);
+    row_num_ = std::ceil((FARUtil::kLocalPlanRange + tp_params_.radius) * 2.0f / tp_params_.voxel_size); // local_planner_range 参数
     col_num_ = row_num_;
     TerrainNodePtr init_terrain_node_ptr = NULL;
     Eigen::Vector3i grid_size(row_num_, col_num_, 1);

@@ -45,6 +45,7 @@ public:
 
     /**
      * @brief Calculate the terrain height of a given point and radius around it
+     * 利用 KD-Tree 进行快速邻域搜索，计算一个点及其周围区域的最小、高度、最大高度和平均高度，并返回平均值。如果找不到有效地形点，则返回输入点的高度值
      * @param p A given position
      * @param radius The radius distance around the given posiitn p
      * @param minH[out] The mininal terrain height in the radius
@@ -135,8 +136,8 @@ private:
     Eigen::Vector3i robot_cell_sub_; // 机器人位置对应的网格索引
     int INFLATE_N;
     bool is_init_ = false;
-    PointCloudPtr flat_terrain_cloud_;
-    static PointKdTreePtr kdtree_terrain_clould_;
+    PointCloudPtr flat_terrain_cloud_;  // 平坦地形点云
+    static PointKdTreePtr kdtree_terrain_clould_; // kd树地形点云
 
     template <typename Position>
     static inline float NearestHeightOfPoint(const Position& p, float& dist_square) {
@@ -158,6 +159,7 @@ private:
 
     void TraversableAnalysis(const PointCloudPtr& terrainHeightOut);
 
+    // 分配平面地形点云，将地形高度赋值给intensity，z值置0
     inline void AssignFlatTerrainCloud(const PointCloudPtr& terrainRef, PointCloudPtr& terrainFlatOut) {
         const int N = terrainRef->size();
         terrainFlatOut->resize(N);
@@ -191,8 +193,8 @@ private:
     std::vector<int> util_obs_modified_list_;   // 地形点云的回调中障碍物点所在的地图网格的索引列表
     std::vector<int> util_free_modified_list_;  // 地形点云的回调中free点所在的地图网格的索引列表
     std::vector<int> util_remove_check_list_;
-    static std::vector<int> terrain_grid_occupy_list_;
-    static std::vector<int> terrain_grid_traverse_list_;
+    static std::vector<int> terrain_grid_occupy_list_;   // 地形网格的free点列表，实时更新
+    static std::vector<int> terrain_grid_traverse_list_; // 地形网格的可通行列表，实时更新
 
     
     static std::unique_ptr<grid_ns::Grid<PointCloudPtr>> world_free_cloud_grid_;    // free点云网格，以第一帧机器人定位为中心

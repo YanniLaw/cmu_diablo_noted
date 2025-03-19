@@ -48,13 +48,15 @@ void ScanHandler::SetCurrentScanCloud(const PointCloudPtr& scanCloudIn, const Po
     if (!is_grids_init_ || scanCloudIn->empty()) return;
     // remove free scan points
     PointCloudPtr copyObsScanCloud(new pcl::PointCloud<PCLPoint>());
-    pcl::copyPointCloud(*scanCloudIn, *copyObsScanCloud);
+    pcl::copyPointCloud(*scanCloudIn, *copyObsScanCloud); // 深拷贝
+    // 去掉copyObsScanCloud 中与freeCloudIn重叠的点，避免误判free点，剩下的是有可能是障碍物的点
     FARUtil::RemoveOverlapCloud(copyObsScanCloud, freeCloudIn, true);
     for (const auto& point : copyObsScanCloud->points) { // assign obstacle scan voxels
-        const float r = pcl::euclideanDistance(point, center_p_);
-        const int L = static_cast<int>(std::ceil((r * ANG_RES_X)/(scan_params_.voxel_size*3)/2.0f))+FARUtil::kObsInflate;
+        const float r = pcl::euclideanDistance(point, center_p_); // 激光点到机器人中心的距离
+        // 扩展标记范围 //TODO 没看懂原理是怎么来的
+        const int L = static_cast<int>(std::ceil((r * ANG_RES_X)/(scan_params_.voxel_size*3)/2.0f))+FARUtil::kObsInflate; // obs_inflate_size 参数
         const int N = static_cast<int>(std::ceil((r * ANG_RES_Y)/(scan_params_.voxel_size*3)/2.0f));
-        Eigen::Vector3i c_sub = voxel_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
+        Eigen::Vector3i c_sub = voxel_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z)); // 该点所在的网格索引
         for (int i = -L; i <= L; i++) {
             for (int j = -L; j <= L; j++) {
                 for (int k = -N; k <= N; k++) {
@@ -62,7 +64,7 @@ void ScanHandler::SetCurrentScanCloud(const PointCloudPtr& scanCloudIn, const Po
                     sub.x() = c_sub.x() + i, sub.y() = c_sub.y() + j, sub.z() = c_sub.z() + k;
                     if (voxel_grids_->InRange(sub)) {
                         const int ind = voxel_grids_->Sub2Ind(sub);
-                        voxel_grids_->GetCell(ind) = voxel_grids_->GetCell(ind) | SCAN_BIT;
+                        voxel_grids_->GetCell(ind) = voxel_grids_->GetCell(ind) | SCAN_BIT; // 标记网格
                     }
                 }
             }
@@ -99,9 +101,15 @@ void ScanHandler::ExtractDyObsCloud(const PointCloudPtr& cloudIn, const PointClo
     }
 }
 
+/**
+ * @brief 基于扫描点构建射线，并将射线沿途的体素标记为 RAY_BIT，类似于Bresenham线算法，用于RayCasting
+ * 
+ * @param point_sub 该点所在的网格索引
+ */
 void ScanHandler::SetRayCloud(const Eigen::Vector3i& point_sub) {
     Eigen::Vector3i dir_sub = point_sub - center_sub_; 
-    if (dir_sub.squaredNorm() < 1.0) return;
+    if (dir_sub.squaredNorm() < 1.0) return; // 平方范数，此时太近(其实就是同一个网格中)，不进行RayCasting
+    // 计算三维步长及方向
     Eigen::Vector3i steps_sub;
     steps_sub.x() = abs(dir_sub.x()), steps_sub.y() = abs(dir_sub.y()), steps_sub.z() = abs(dir_sub.z());
     Eigen::Vector3i sign_sub;
@@ -118,8 +126,8 @@ void ScanHandler::SetRayCloud(const Eigen::Vector3i& point_sub) {
             if (!voxel_grids_->InRange(csub)) break;
             const int ind = voxel_grids_->Sub2Ind(csub);
             const char cell_c = voxel_grids_->GetCell(ind); 
-            if ((cell_c | SCAN_BIT) == cell_c) break; // hit scan point cell
-            voxel_grids_->GetCell(ind) = cell_c | RAY_BIT;
+            if ((cell_c | SCAN_BIT) == cell_c) break; // hit scan point cell，遇到已标记的网格，停止射线传播
+            voxel_grids_->GetCell(ind) = cell_c | RAY_BIT; // 沿射线方向依次标记经过的网格
         }
     } else if (steps_sub.y() >= std::max(steps_sub.x(), steps_sub.z())) {
         const int N = steps_sub.y();

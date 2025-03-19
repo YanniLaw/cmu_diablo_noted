@@ -755,21 +755,21 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
   // extract dynamic obstacles
   FARUtil::cur_dyobs_cloud_->clear();
   if (!master_params_.is_static_env && !is_stop_update_) {
-    this->ExtractDynamicObsFromScan(FARUtil::cur_scan_cloud_, 
-                                    FARUtil::surround_obs_cloud_, 
-                                    FARUtil::surround_free_cloud_, 
+    this->ExtractDynamicObsFromScan(FARUtil::cur_scan_cloud_, // scan回调更新
+                                    FARUtil::surround_obs_cloud_, // UpdateObsCloudGrid填值, GetSurroundObsCloud 获得
+                                    FARUtil::surround_free_cloud_, // UpdateFreeCloudGrid填值, GetSurroundFreeCloud 获得
                                     FARUtil::cur_dyobs_cloud_);
-    if (int(FARUtil::cur_dyobs_cloud_->size()) > FARUtil::kDyObsThred) {
+    if (int(FARUtil::cur_dyobs_cloud_->size()) > FARUtil::kDyObsThred) { // kDyObsThred 是 dyosb_update_thred 参数
       if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "FARMaster: dynamic obstacle detected, size: %ld", FARUtil::cur_dyobs_cloud_->size());
-      FARUtil::InflateCloud(FARUtil::cur_dyobs_cloud_, master_params_.voxel_dim, 1, true);
-      map_handler_.RemoveObsCloudFromGrid(FARUtil::cur_dyobs_cloud_);
-      FARUtil::RemoveOverlapCloud(FARUtil::surround_obs_cloud_, FARUtil::cur_dyobs_cloud_);
+      FARUtil::InflateCloud(FARUtil::cur_dyobs_cloud_, master_params_.voxel_dim, 1, true); // 动态障碍物点云膨胀
+      map_handler_.RemoveObsCloudFromGrid(FARUtil::cur_dyobs_cloud_); // 去掉障碍物点云网格world_obs_cloud_grid_中跟动态障碍物点云重叠的点
+      FARUtil::RemoveOverlapCloud(FARUtil::surround_obs_cloud_, FARUtil::cur_dyobs_cloud_); // 去掉附近障碍物点云中跟动态障碍物点云重叠的点
       FARUtil::FilterCloud(FARUtil::cur_dyobs_cloud_, master_params_.voxel_dim);
-      // update new cloud
+      // update new cloud，更新新的障碍物点云
       *FARUtil::cur_new_cloud_ += *FARUtil::cur_dyobs_cloud_;
       FARUtil::FilterCloud(FARUtil::cur_new_cloud_, master_params_.voxel_dim);
     }
-    // update world dynamic obstacles
+    // update world dynamic obstacles，更新动态障碍物点云，并去掉旧的点云
     FARUtil::StackCloudByTime(FARUtil::cur_dyobs_cloud_, FARUtil::stack_dyobs_cloud_, FARUtil::kObsDecayTime, nh_);
   }
   
@@ -785,14 +785,14 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
   planner_viz_.VizPointCloud(surround_free_debug_, FARUtil::surround_free_cloud_);
   planner_viz_.VizPointCloud(surround_obs_debug_,  FARUtil::surround_obs_cloud_);
   planner_viz_.VizPointCloud(terrain_height_pub_, terrain_height_ptr_);
-  // visualize map grid
+  // visualize map grid 可视化相邻障碍物点云网格与所有的障碍物点云网格中心点
   PointStack neighbor_centers, occupancy_centers;
   map_handler_.GetNeighborCeilsCenters(neighbor_centers);
   map_handler_.GetOccupancyCeilsCenters(occupancy_centers);
   planner_viz_.VizMapGrids(neighbor_centers, occupancy_centers, map_params_.cell_length, map_params_.cell_height);
   // DBBUG visual raycast grids
   if (!master_params_.is_static_env) {
-    scan_handler_.GridVisualCloud(scan_grid_ptr_, GridStatus::RAY);
+    scan_handler_.GridVisualCloud(scan_grid_ptr_, GridStatus::RAY); // 提取RAY_BIT的相关网格存到scan_grid_ptr_中
     planner_viz_.VizPointCloud(scan_grid_debug_, scan_grid_ptr_);
   }
 }

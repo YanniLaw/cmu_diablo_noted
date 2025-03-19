@@ -213,6 +213,7 @@ private:
                                    const PointCloudPtr& dyObsCloudOut);
 
     /* define inline functions */
+    // 检查是否提取出障碍物点云 以及 是否收到定位数据
     inline bool PreconditionCheck() {
         if (is_cloud_init_ && is_odom_init_) {
             return true;

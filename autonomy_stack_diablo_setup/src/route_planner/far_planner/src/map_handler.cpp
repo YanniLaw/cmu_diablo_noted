@@ -64,7 +64,7 @@ void MapHandler::Init(const MapHandlerParams& params) {
 
     INFLATE_N = 1;
     flat_terrain_cloud_    = PointCloudPtr(new pcl::PointCloud<PCLPoint>()); // 平坦地形点云
-    kdtree_terrain_clould_ = PointKdTreePtr(new pcl::KdTreeFLANN<PCLPoint>()); // kd树地的形点云
+    kdtree_terrain_clould_ = PointKdTreePtr(new pcl::KdTreeFLANN<PCLPoint>()); // kd树地形点云
     kdtree_terrain_clould_->setSortedResults(false); // 配置最近邻搜索结果不用进行排序
 }
 
@@ -379,7 +379,7 @@ void MapHandler::ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_o
     neighbor_obs.clear();
     const float R = map_params_.cell_length * 0.7071f; // sqrt(2)/2
     for (const auto& idx : neighbor_copy) {
-        const Point3D pos = Point3D(world_obs_cloud_grid_->Ind2Pos(idx));
+        const Point3D pos = Point3D(world_obs_cloud_grid_->Ind2Pos(idx)); // 计算该索引物理位置
         bool inRange = false;
         float minH, maxH;
         NearestHeightOfRadius(pos, R, minH, maxH, inRange);
@@ -435,9 +435,10 @@ void MapHandler::UpdateTerrainHeightGrid(const PointCloudPtr& freeCloudIn, const
         kdtree_terrain_clould_->setInputCloud(flat_terrain_cloud_);
     }
     // update surrounding obs cloud grid indices based on terrain
-    this->ObsNeighborCloudWithTerrain(neighbor_obs_indices_, extend_obs_indices_);
+    this->ObsNeighborCloudWithTerrain(neighbor_obs_indices_, extend_obs_indices_); // neighbor_obs_indices_ 在这里清空了
 }
 
+// 可通行性分析，生成可通行稀疏点云
 void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
     // 获取机器人当前位置在地形高程网格中索引
     const Eigen::Vector3i robot_sub = terrain_height_grid_->Pos2Sub(Eigen::Vector3d(FARUtil::robot_pos.x, 
@@ -486,8 +487,8 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
     while (!q.empty()) {
         const int cur_id = q.front();
         q.pop_front();
-        // 一般机器人位置所在的网格以及周围一些网格都是没有地形数据的(因为lidar存在盲区，就算有也不准确)
-        if (terrain_grid_occupy_list_[cur_id] != 0) { // 有地形数据(本轮free point 所在的网格)
+        // 一般机器人位置所在的网格以及周围一些网格都是没有地形数据的(由于diablo激光雷达的安装方式，如果能打到地面的话会有一米的盲区)
+        if (terrain_grid_occupy_list_[cur_id] != 0) { // 有地形free数据(本轮free point 所在的网格)
             if (!is_robot_terrain_init) {
                 float avg_h = 0.0f;
                 int counter = 0;
@@ -506,9 +507,10 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
             } else { // 初始化成功直接添加
                 AddTraversePoint(cur_id);
             }
-        } else if (is_robot_terrain_init) { // 没有free地形数据，且地形已经初始化了，那么就不继续拓展了
+        } else if (is_robot_terrain_init) { // 没有free地形数据，且地形已经初始化了，那么就不需要往该网格的四个邻域方向扩展了
             continue;
         }
+        // 两种情况会继续扩展: 1. 地形高度没有初始化; 2. 有free 地形数据
         const Eigen::Vector3i csub = terrain_height_grid_->Ind2Sub(cur_id);
         for (int i=0; i<4; i++) { // 四邻域
             Eigen::Vector3i ref_sub = csub;
@@ -526,7 +528,7 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
     }
 }
 
-
+// 提取相邻障碍物点云网格的中心点
 void MapHandler::GetNeighborCeilsCenters(PointStack& neighbor_centers) {
     if (!is_init_) return;
     neighbor_centers.clear();
@@ -537,6 +539,7 @@ void MapHandler::GetNeighborCeilsCenters(PointStack& neighbor_centers) {
     }
 }
 
+// 提取所有障碍物点云网格的中心点
 void MapHandler::GetOccupancyCeilsCenters(PointStack& occupancy_centers) {
     if (!is_init_) return;
     occupancy_centers.clear();
