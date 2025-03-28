@@ -30,7 +30,7 @@ far_planner:
     # Dynamic Planner Utility Params
     util/angle_noise: 15.0  # Unit: degree
     util/accept_max_align_angle: 4.0   # Unit: degree
-    util/obs_inflate_size: 1        # 障碍物膨胀尺寸
+    util/obs_inflate_size: 1        # 障碍物膨胀尺寸 int类型
     util/new_intensity_thred: 2.0   # 阈值
     util/terrain_free_Z: 0.15       # 障碍物的高程值阈值，低于这个值表示free，否则是obs
     util/dyosb_update_thred: 4      # 动态障碍物更新阈值
@@ -45,8 +45,8 @@ far_planner:
     graph/filter_pool_size: 12
 
     # Corner Detector Params
-    c_detector/resize_ratio: 3.0
-    c_detector/filter_count_value: 6
+    c_detector/resize_ratio: 3.0 # resize的比例
+    c_detector/filter_count_value: 6 # 进行障碍物图像二值化的阈值
     c_detector/is_save_img: false
     c_detector/img_folder_path: /path
 

@@ -120,7 +120,7 @@ public:
     static TimeMeasure Timer;
     static std::string worldFrameId;
     // PCL Clouds
-    static PointCloudPtr surround_obs_cloud_;   // surround obstacle cloud
+    static PointCloudPtr surround_obs_cloud_;   // surround obstacle cloud 非动态障碍物
     static PointCloudPtr surround_free_cloud_;  // surround free space cloud
     static PointCloudPtr stack_new_cloud_;      // new obstacle points cloud      
     static PointCloudPtr stack_dyobs_cloud_;    // 有时间记忆的动态障碍物点云
@@ -417,6 +417,7 @@ public:
         return return_p;
     }
     
+    // 判断点p 是否处于多边形poly内部
     template <typename Point>
     static bool PointInsideAPoly(const std::vector<Point>& poly, const Point& p) {
         // By Randolph Franklin, https://www.eecs.umich.edu/courses/eecs380/HANDOUTS/PROJ2/InsidePoly.html

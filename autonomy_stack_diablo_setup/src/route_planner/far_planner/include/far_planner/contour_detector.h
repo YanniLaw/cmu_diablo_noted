@@ -22,7 +22,7 @@ private:
     cv::Point2f free_odom_resized_;
     ContourDetectParams cd_params_;
     PointCloudPtr new_corners_cloud_;
-    cv::Mat img_mat_;
+    cv::Mat img_mat_; // 图像矩阵
     std::size_t img_counter_;
     std::vector<CVPointStack> refined_contours_;
     std::vector<cv::Vec4i> refined_hierarchy_;
@@ -85,14 +85,15 @@ private:
         }
     }
 
-    inline void InternalContoursIdxs(const std::vector<cv::Vec4i>& hierarchy,
-                                     const std::size_t& high_idx,
+    inline void InternalContoursIdxs(const std::vector<cv::Vec4i>& hierarchy, // 轮廓层级关系
+                                     const std::size_t& high_idx, // 当前轮廓索引
                                      std::unordered_set<int>& internal_idxs)
     {
-        if (hierarchy[high_idx][2] == -1) return;
+        if (hierarchy[high_idx][2] == -1) return; // 当前轮廓的子轮廓为空
         SameAndLowLevelIdxs(hierarchy, hierarchy[high_idx][2], internal_idxs);
     }
 
+    // 递归地获取一个轮廓及其所有子轮廓的索引，并将它们添加到 remove_idxs 集合中
     inline void SameAndLowLevelIdxs(const std::vector<cv::Vec4i>& hierarchy,
                                     const std::size_t& cur_idx,
                                     std::unordered_set<int>& remove_idxs)
@@ -118,7 +119,8 @@ private:
         return cv_p;
     }
 
-
+    // 根据给定的 posIn 和 c_posIn 计算在图像中的行列索引，并考虑图像缩放以及边界处理
+    // c_posIn 是机器人位置，同时也是整个图像的中心
     template <typename Point>
     inline void PointToImgSub(const Point& posIn, const Point3D& c_posIn,
                               int& row_idx, int& col_idx,
@@ -134,12 +136,14 @@ private:
         } 
     }
 
+    // 索引裁剪，确保不超过图像的有效范围
     inline void CropIdxes(int& row_idx, int& col_idx, const bool& is_resized_img=false) {
         const int max_size = is_resized_img ? MAT_RESIZE : MAT_SIZE;
         row_idx = (int)std::max(std::min(row_idx, max_size-1),0);
         col_idx = (int)std::max(std::min(col_idx, max_size-1),0);
     }
 
+    // 检查索引是否处于图像内
     inline bool IsIdxesInImg(int& row_idx, int& col_idx, const bool& is_resized_img=false) {
         const int max_size = is_resized_img ? MAT_RESIZE : MAT_SIZE;
         if (row_idx < 0 || row_idx > max_size-1 || col_idx < 0 || col_idx > max_size-1) {

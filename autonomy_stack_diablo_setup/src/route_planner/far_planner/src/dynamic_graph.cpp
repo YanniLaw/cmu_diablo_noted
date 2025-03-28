@@ -29,11 +29,11 @@ void DynamicGraph::UpdateRobotPosition(const Point3D& robot_pos) {
     robot_pos_ = robot_pos;
     terrain_planner_.SetLocalTerrainObsCloud(FARUtil::local_terrain_obs_); // 设置局部地形障碍物点云
     if (odom_node_ptr_ == NULL) {
-        this->CreateNavNodeFromPoint(robot_pos_, odom_node_ptr_, true);
-        this->AddNodeToGraph(odom_node_ptr_);
+        this->CreateNavNodeFromPoint(robot_pos_, odom_node_ptr_, true); // 创建odom节点odom_node_ptr_
+        this->AddNodeToGraph(odom_node_ptr_); // 将odom_node_ptr_节点加入到图节点数组中
         if (FARUtil::IsDebug) RCLCPP_INFO(nh_->get_logger(), "DG: Odom node has been initilaized.");
     } else {
-        this->UpdateNodePosition(odom_node_ptr_, robot_pos_);
+        this->UpdateNodePosition(odom_node_ptr_, robot_pos_); // 用当前位置更新odom_node_ptr_节点
     }
     FARUtil::odom_pos = odom_node_ptr_->position;
     terrain_planner_.VisualPaths();
@@ -475,10 +475,10 @@ bool DynamicGraph::UpdateNodePosition(const NavNodePtr& node_ptr,
     }
     // calculate mean nav node position using RANSACS
     std::size_t inlier_size = 0;
-    Point3D mean_p = FARUtil::RANSACPoisiton(node_ptr->pos_filter_vec, dg_params_.filter_pos_margin, inlier_size);
+    Point3D mean_p = FARUtil::RANSACPoisiton(node_ptr->pos_filter_vec, dg_params_.filter_pos_margin, inlier_size); // filter_pos_margin 即kNavClearDist
     if (node_ptr->pos_filter_vec.size() > 1) mean_p.z = node_ptr->position.z; // keep z value with terrain updates
     node_ptr->position = mean_p;
-    if (int(inlier_size) > dg_params_.finalize_thred) {
+    if (int(inlier_size) > dg_params_.finalize_thred) { // node_finalize_thred 最小的内点数
         return true;
     }
     return false;

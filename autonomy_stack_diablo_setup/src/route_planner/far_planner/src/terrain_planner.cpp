@@ -23,7 +23,7 @@ void TerrainPlanner::Init(const rclcpp::Node::SharedPtr nh, const TerrainPlanner
     viz_path_stack_.clear();
 
     local_path_pub_   = nh_->create_publisher<Marker>("/local_terrain_path_debug", 5);
-    terrain_map_pub_  = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/local_terrain_map_debug", 5);
+    terrain_map_pub_  = nh_->create_publisher<sensor_msgs::msg::PointCloud2>("/local_terrain_map_debug", 5); // 障碍物网格进行点云可视化
 }
 
 void TerrainPlanner::UpdateCenterNode(const NavNodePtr& node_ptr) {
@@ -39,9 +39,10 @@ void TerrainPlanner::UpdateCenterNode(const NavNodePtr& node_ptr) {
     this->ResetGridsOccupancy();
 }
 
+// 局部地形网格障碍物膨胀标记
 void TerrainPlanner::SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn) {
     if (!is_grids_init_ || obsCloudIn->empty()) return;
-    const int N_IF = tp_params_.inflate_size;
+    const int N_IF = tp_params_.inflate_size; // 膨胀的网格半径
     for (const auto& point : obsCloudIn->points) {
         Eigen::Vector3i c_sub = terrain_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, center_pos_.z));
         for (int i = -N_IF; i <= N_IF; i++) {
@@ -50,7 +51,7 @@ void TerrainPlanner::SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn) {
                 sub.x() = c_sub.x() + i, sub.y() = c_sub.y() + j, sub.z() = 0;
                 if (terrain_grids_->InRange(sub)) {
                     const int ind = terrain_grids_->Sub2Ind(sub);
-                    terrain_grids_->GetCell(ind)->is_occupied = true;
+                    terrain_grids_->GetCell(ind)->is_occupied = true; // 网格标记
                 }
             }
         }

@@ -6,7 +6,7 @@
 enum NodeType {
     NOT_DEFINED = 0,  // 未定义
     GROUND      = 1,  // 地面节点
-    AIR         = 2   // 空气节点
+    AIR         = 2   // 空中节点
 };
 
 enum NodeFreeDirect {
@@ -65,25 +65,25 @@ struct NavNode
 {
     NavNode() = default;
     std::size_t id;
-    Point3D position;
+    Point3D position;   // 节点位置
     PointPair surf_dirs;
     std::deque<Point3D> pos_filter_vec;
     std::deque<PointPair> surf_dirs_vec;
     CTNodePtr ctnode;
-    bool is_active;
-    bool is_block_frontier;
-    bool is_contour_match;
-    bool is_odom;
-    bool is_goal;
-    bool is_near_nodes;
-    bool is_wide_near;
-    bool is_merged;
-    bool is_covered;
-    bool is_frontier;
-    bool is_finalized;
-    bool is_navpoint;
-    bool is_boundary;
-    int  clear_dumper_count;
+    bool is_active;           // 是否激活
+    bool is_block_frontier;   // 是否
+    bool is_contour_match;    // 是否
+    bool is_odom;             // 是否为odom 节点
+    bool is_goal;             // 是否为目标点
+    bool is_near_nodes;       // 是否靠近节点
+    bool is_wide_near;        // 是否
+    bool is_merged;           // 是否合并
+    bool is_covered;          // 是否覆盖
+    bool is_frontier;         // 是否边界点
+    bool is_finalized;        // 是否为终点
+    bool is_navpoint;         // 是否为导航点
+    bool is_boundary;         // 是否为边界点
+    int  clear_dumper_count;  // 清除
     std::deque<int> frontier_votes;
     std::unordered_set<std::size_t> invalid_boundary;
     std::vector<std::shared_ptr<NavNode>> connect_nodes;
@@ -96,12 +96,12 @@ struct NavNode
     std::vector<std::shared_ptr<NavNode>> trajectory_connects;
     std::unordered_map<std::size_t, std::size_t> trajectory_votes;
     std::unordered_map<std::size_t, std::size_t> terrain_votes;
-    NodeType node_type; 
-    NodeFreeDirect free_direct;
+    NodeType node_type; // 节点类型
+    NodeFreeDirect free_direct;   // 自由方向???
     // planner members
     bool is_block_to_goal;
-    bool is_traversable;
-    bool is_free_traversable;
+    bool is_traversable;        // 是否可通行
+    bool is_free_traversable;   // 是否可以自由通行
     float gscore, fgscore;
     std::shared_ptr<NavNode> parent;
     std::shared_ptr<NavNode> free_parent;

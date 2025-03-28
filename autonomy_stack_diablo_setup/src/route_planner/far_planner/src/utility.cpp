@@ -655,9 +655,10 @@ std::size_t FARUtil::CounterOfPillar(const std::deque<PointPair>& dirs_stack) {
   return counter;
 }
 
+// 利用RANSAC 算法计算位置(稳定的位置估计)
 Point3D FARUtil::RANSACPoisiton(const std::deque<Point3D>& pos_filter_stack, const float& margin, std::size_t& inlier_size) {
   inlier_size = 0;
-  PointStack inlier_stack;
+  PointStack inlier_stack; //内点
   for (const auto& p : pos_filter_stack) {
     std::size_t temp_inlier_size = 0;
     PointStack temp_inlier_stack;

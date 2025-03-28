@@ -189,6 +189,7 @@ void FARMaster::MainLoopCallBack() {
   }
   /* Extract Vertices and new nodes */
   FARUtil::Timer.start_time("Total V-Graph Update");
+  // 根据当前机器人附近的障碍物点云创建地形图像并提取边缘
   contour_detector_.BuildTerrainImgAndExtractContour(odom_node_ptr_, FARUtil::surround_obs_cloud_, realworld_contour_);
   contour_graph_.UpdateContourGraph(odom_node_ptr_, realworld_contour_);
   if (is_graph_init_) {
@@ -736,12 +737,12 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
     if (!master_params_.is_static_env) {
       FARUtil::RemoveOverlapCloud(temp_obs_ptr_, FARUtil::stack_dyobs_cloud_, true);
     }
-    map_handler_.UpdateObsCloudGrid(temp_obs_ptr_);
+    map_handler_.UpdateObsCloudGrid(temp_obs_ptr_); // 除了更新障碍物网格之外还对 temp_obs_ptr_ 进一步过滤(只有在机器人附近网格的点才会保留)
     map_handler_.UpdateFreeCloudGrid(temp_free_ptr_);
     // extract new points
     // 提取新出现的障碍物点云(去掉temp_obs_ptr_中跟surround_obs_cloud_重合的点，存放在cur_new_cloud_中)
     FARUtil::ExtractNewObsPointCloud(temp_obs_ptr_, // 0 属性做了修改
-                                     FARUtil::surround_obs_cloud_, // 255
+                                     FARUtil::surround_obs_cloud_, // 255 表示上一次处理时附近的障碍物点云
                                      FARUtil::cur_new_cloud_); // 与surround_obs_cloud_拼接后 再进行滤波
   } else { // stop env update
     temp_cloud_ptr_->clear();
@@ -750,7 +751,7 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
   // extract surround free cloud & update terrain height
   map_handler_.GetSurroundFreeCloud(FARUtil::surround_free_cloud_);
   map_handler_.UpdateTerrainHeightGrid(FARUtil::surround_free_cloud_, terrain_height_ptr_);
-  // update surround obs cloud
+  // update surround obs cloud 更新机器人附近的障碍物点云
   map_handler_.GetSurroundObsCloud(FARUtil::surround_obs_cloud_);
   // extract dynamic obstacles
   FARUtil::cur_dyobs_cloud_->clear();

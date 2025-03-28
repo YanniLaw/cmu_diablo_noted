@@ -11,7 +11,7 @@ struct DynamicGraphParams {
     DynamicGraphParams() = default;
     int   dumper_thred;
     int   finalize_thred;
-    int   pool_size;
+    int   pool_size; // 节点位置队列的大小，filter_pool_size参数
     int   votes_size;
     float kConnectAngleThred;
     float filter_pos_margin;
