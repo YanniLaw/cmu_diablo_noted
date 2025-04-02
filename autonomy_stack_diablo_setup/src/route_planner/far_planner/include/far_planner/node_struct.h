@@ -32,7 +32,7 @@ struct Polygon
   Polygon() = default;
   std::size_t N;  // 多边形顶点数
   std::vector<Point3D> vertices;  // 各个顶点坐标
-  bool is_robot_inside; // 机器人是否在其中
+  bool is_robot_inside; // 机器人是否在多边形内部
   bool is_pillar;       // 是否是柱形
   float perimeter;      // 周长
 };
@@ -43,17 +43,17 @@ typedef std::vector<PolygonPtr> PolygonStack;
 struct CTNode
 {
     CTNode() = default;
-    Point3D position;
+    Point3D position; // 轮廓节点所在位置
     bool is_global_match;
     bool is_contour_necessary;
     bool is_ground_associate;
     std::size_t nav_node_id;
-    NodeFreeDirect free_direct;
+    NodeFreeDirect free_direct; // 节点free方向
 
     PointPair surf_dirs;
-    PolygonPtr poly_ptr;
-    std::shared_ptr<CTNode> front;
-    std::shared_ptr<CTNode> back;
+    PolygonPtr poly_ptr;  // 多边形轮廓指针
+    std::shared_ptr<CTNode> front;  // 前驱节点
+    std::shared_ptr<CTNode> back;   // 后继节点
 
     std::vector<std::shared_ptr<CTNode>> connect_nodes;
 };

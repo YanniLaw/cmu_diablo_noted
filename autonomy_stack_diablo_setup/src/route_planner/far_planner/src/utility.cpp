@@ -285,6 +285,7 @@ void FARUtil::Flat3DPointCloud(const PointCloudPtr& cloudIn,
   }
 }
 
+// 保证结果非负数
 int FARUtil::Mod(const int& a, const int& b) {
   return (b + (a % b)) % b;
 }
@@ -400,6 +401,7 @@ float FARUtil::DirsDistance(const PointPair& ref_dirs, const PointPair& compare_
   return a_d1 + a_d2;
 }
 
+// 计算轮廓拓扑方向，并判断此时该轮廓点是否为墙壁点
 Point3D FARUtil::SurfTopoDirect(const PointPair& dirs, bool& _is_wall) {
   const Point3D topo_dir = dirs.first + dirs.second;
   _is_wall = false;
@@ -596,6 +598,7 @@ float FARUtil::ApproxAtan2(const float& y, const float x) {
   return th;
 }
 
+// 计算两个像素点的欧式距离
 float FARUtil::PixelDistance(const cv::Point2f& pre_p, const cv::Point2f& cur_p) {
   return std::hypotf(pre_p.x - cur_p.x, pre_p.y - cur_p.y);
 }
@@ -610,6 +613,7 @@ float FARUtil::VerticalDistToLine2D(const Point3D& start_p,
   return sin(acos(dot_value)) * diff_p.norm_flat();
 }
 
+// 计算轮廓点 center_p 在 start_p -> end_p 线段上的最佳表面方向，避免机器人误判轮廓方向
 Point3D FARUtil::ContourSurfDirs(const Point3D& end_p, 
                                  const Point3D& start_p, 
                                  const Point3D& center_p,
@@ -618,14 +622,14 @@ Point3D FARUtil::ContourSurfDirs(const Point3D& end_p,
   const float D = (center_p - end_p).norm_flat();
   const float phi = std::acos((center_p - end_p).norm_flat_dot(start_p - end_p));
   const float H = D * sin(phi);
-  if (H < FARUtil::kEpsilon) { // co-linear
+  if (H < FARUtil::kEpsilon) { // co-linear 此时三个点近似共线
     return (end_p - center_p).normalize_flat();
   }
-  const float theta = asin(FARUtil::ClampAbsRange(H / radius, 1.0f));
+  const float theta = asin(FARUtil::ClampAbsRange(H / radius, 1.0f)); // 将输入保持在[-1,1]，保证asin有效性
   const Point3D dir = (start_p - end_p).normalize_flat();
-  const Point3D V_p = end_p + dir * D * cos(phi);
-  const Point3D K_p = V_p - dir * radius * cos(theta);
-  return (K_p - center_p).normalize_flat();;
+  const Point3D V_p = end_p + dir * D * cos(phi); // center 在 start_p -> end_p 投影点
+  const Point3D K_p = V_p - dir * radius * cos(theta); // 修正点
+  return (K_p - center_p).normalize_flat();
 }
 
 float FARUtil::CosinTheta(const Point3D& vertex, const Point3D& p1, const Point3D& p2) {
@@ -765,6 +769,7 @@ bool FARUtil::IsInCylinder(const Point3D& from_p, const Point3D& end_p, const Po
   return true;
 }
 
+// 在中心点周围生成一定半径的栅格点
 void FARUtil::CreatePointsAroundCenter(const Point3D& center_p, 
                                       const float& radius,
                                       const float& resol,
@@ -772,19 +777,19 @@ void FARUtil::CreatePointsAroundCenter(const Point3D& center_p,
                                       const bool& is_sort)
 {
   const int H_SIZE = std::ceil(radius / resol);
-  const std::size_t grid_size = (2*H_SIZE+1) * (2*H_SIZE+1);
+  const std::size_t grid_size = (2*H_SIZE+1) * (2*H_SIZE+1); // 生成方形区域的均匀点集
   points_stack.clear(), points_stack.resize(grid_size);
   std::size_t idx = 0;
   for (int i=-H_SIZE; i<=H_SIZE; i++) {
       for (int j=-H_SIZE; j<=H_SIZE; j++) {
           Point3D p(center_p.x+resol*i, center_p.y+resol*j, center_p.z);
-          p.intensity = (p - center_p).norm();
+          p.intensity = (p - center_p).norm(); // 自定义intensity为到中心点的距离
           points_stack[idx] = p;
           idx ++;
       }
   }
   points_stack.resize(idx);
-  if (is_sort) {
+  if (is_sort) { // 根据到中心点距离进行排序
     std::sort(points_stack.begin(), points_stack.end(), intensity_comp());
   }
 }

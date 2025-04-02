@@ -31,7 +31,7 @@ private:
     int MAT_SIZE, CMAT;             // 图像矩阵的尺寸/一半尺寸
     int MAT_RESIZE, CMAT_RESIZE;    // resize后的图像尺寸/一半尺寸
     float DIST_LIMIT;
-    float ALIGN_ANGLE_COS;
+    float ALIGN_ANGLE_COS; // accept_max_align_angle 参数
     float VOXEL_DIM_INV;
     
 
@@ -72,14 +72,16 @@ private:
         }
     }
 
+    // 平滑轮廓，去除不必要的墙状点
     inline void RemoveWallConnection(const CVPointStack& contour,
                                      const cv::Point2f& add_p,
                                      std::size_t& refined_idx)
     {
         if (refined_idx < 2) return;
-        if (!IsPrevWallVertex(contour[refined_idx-2], contour[refined_idx-1], add_p)) {
+        // 判断前一个点是否是顶点 即 三个点的夹角
+        if (!IsPrevWallVertex(contour[refined_idx-2], contour[refined_idx-1], add_p)) { // 夹角小于一定值
             return;
-        } else {
+        } else { // 夹角较大
             -- refined_idx;
             RemoveWallConnection(contour, add_p, refined_idx);
         }
@@ -157,8 +159,9 @@ private:
         img_mat = cv::Mat::zeros(MAT_SIZE, MAT_SIZE, CV_32FC1);
     }
 
+    // 将2D坐标转换为3D世界坐标，z坐标用机器人坐标的z值来代替
     inline Point3D ConvertCVPointToPoint3D(const cv::Point2f& cv_p,
-                                           const Point3D& c_pos,
+                                           const Point3D& c_pos, // 机器人位置
                                            const bool& is_resized_img=false) {
         Point3D p;
         const int c_idx = is_resized_img ? CMAT_RESIZE : CMAT;
@@ -186,9 +189,9 @@ private:
     {
         cv::Point2f diff_p1 = first_p - mid_p;
         cv::Point2f diff_p2 = add_p - mid_p;
-        diff_p1 /= std::hypotf(diff_p1.x, diff_p1.y);
+        diff_p1 /= std::hypotf(diff_p1.x, diff_p1.y); // 归一化
         diff_p2 /= std::hypotf(diff_p2.x, diff_p2.y);
-        if (abs(diff_p1.dot(diff_p2)) > ALIGN_ANGLE_COS) return true;
+        if (abs(diff_p1.dot(diff_p2)) > ALIGN_ANGLE_COS) return true; // 点积结果即为余弦值
         return false;
     }
 

@@ -320,6 +320,7 @@ public:
         return true;
     }
 
+    // 计算点集的中心
     template <typename T_vec>
     static Point3D AveragePoints(const T_vec& point_stack) {
         Point3D mean_p(0,0,0);
@@ -400,6 +401,7 @@ public:
         return false;
     }
 
+    // 将value 限制在 [-range, range之间]
     static float ClampAbsRange(const float& value, float range) {
         range = abs(range);
         return std::min(std::max(-range, value), range);

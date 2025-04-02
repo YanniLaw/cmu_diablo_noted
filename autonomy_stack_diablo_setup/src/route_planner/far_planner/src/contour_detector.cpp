@@ -25,7 +25,7 @@ void ContourDetector::Init(const ContourDetectParams& params) {
     odom_node_ptr_ = NULL;
     refined_contours_.clear(), refined_hierarchy_.clear();
     DIST_LIMIT = cd_params_.kRatio * 1.2f;
-    ALIGN_ANGLE_COS = cos(FARUtil::kAcceptAlign / 2.0f);
+    ALIGN_ANGLE_COS = cos(FARUtil::kAcceptAlign / 2.0f); // accept_max_align_angle 4/2 = 2 114 度
     VOXEL_DIM_INV = 1.0f / cd_params_.voxel_dim;
 }
 
@@ -147,7 +147,7 @@ void ContourDetector::AdjecentDistanceFilter(std::vector<CVPointStack>& contours
             cv::Point2f p = c[j]; 
             if (refined_idx < 1 || FARUtil::PixelDistance(contoursInOut[i][refined_idx-1], p) > DIST_LIMIT) {
                 /** Reduce wall nodes */
-                RemoveWallConnection(contoursInOut[i], p, refined_idx);
+                RemoveWallConnection(contoursInOut[i], p, refined_idx); // refined_idx需要>2这个函数才有用
                 contoursInOut[i][refined_idx] = p;
                 refined_idx ++;
             }

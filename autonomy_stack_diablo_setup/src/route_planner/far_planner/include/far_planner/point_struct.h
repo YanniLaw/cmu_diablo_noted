@@ -120,6 +120,7 @@ struct Point3D {
     return std::min(std::max(-1.0f, dot_value), 1.0f);
   };
 
+  // 计算与给定点p在平面上的标准化点积
   float norm_flat_dot(Point3D p) const
   {
     const float n1 = std::hypotf(x, y);
@@ -128,7 +129,7 @@ struct Point3D {
       return 0.f;
     }
     const float dot_value = (x * p.x + y * p.y) / (n1 * n2);
-    return std::min(std::max(-1.0f, dot_value), 1.0f);
+    return std::min(std::max(-1.0f, dot_value), 1.0f); // 将结果限制在 [−1,1] 范围内，防止浮点误差导致超出余弦值的合法范围
   };
 
   std::string ToString() const
