@@ -257,14 +257,14 @@ float MapHandler::TerrainHeightOfPoint(const Point3D& p, bool& is_matched, const
     const Eigen::Vector3i sub = terrain_height_grid_->Pos2Sub(Eigen::Vector3d(p.x, p.y, 0.0f));
     if (terrain_height_grid_->InRange(sub)) {
         const int ind = terrain_height_grid_->Sub2Ind(sub);
-        if (terrain_grid_traverse_list_[ind] != 0) {
+        if (terrain_grid_traverse_list_[ind] != 0) { // 查询点处于地形网格可通行列表中，直接返回地形网格的高度值
             is_matched = true;
             return terrain_height_grid_->GetCell(ind)[0];
         }
     }
     if (is_search) {
         float matched_dist_squre;
-        const float terrain_h = NearestHeightOfPoint(p, matched_dist_squre);
+        const float terrain_h = NearestHeightOfPoint(p, matched_dist_squre); // 搜索最近邻的地形高度数据
         return terrain_h;
     }
     return p.z; 
@@ -363,10 +363,10 @@ void MapHandler::AdjustCTNodeHeight(const CTNodeStack& ctnodes) {
     for (auto& ctnode_ptr : ctnodes) {
         float min_th, max_th;
         NearestHeightOfRadius(ctnode_ptr->position, FARUtil::kMatchDist, min_th, max_th, ctnode_ptr->is_ground_associate);
-        if (ctnode_ptr->is_ground_associate) {
+        if (ctnode_ptr->is_ground_associate) { // 在该范围内搜索到了最近邻点，节点与地面有关
             ctnode_ptr->position.z = min_th + FARUtil::vehicle_height;
-            ctnode_ptr->position.z = std::max(std::min(ctnode_ptr->position.z, H_MAX), H_MIN);
-        } else {
+            ctnode_ptr->position.z = std::max(std::min(ctnode_ptr->position.z, H_MAX), H_MIN); // 限制范围
+        } else { // 未搜索到最近邻点
             ctnode_ptr->position.z = TerrainHeightOfPoint(ctnode_ptr->position, ctnode_ptr->is_ground_associate, true);
             ctnode_ptr->position.z += FARUtil::vehicle_height;
             ctnode_ptr->position.z = std::max(std::min(ctnode_ptr->position.z, H_MAX), H_MIN);

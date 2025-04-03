@@ -46,23 +46,23 @@ public:
     /**
      * @brief Calculate the terrain height of a given point and radius around it
      * 利用 KD-Tree 进行快速邻域搜索，计算一个点及其周围区域的最小、高度、最大高度和平均高度，并返回平均值。如果找不到有效地形点，则返回输入点的高度值
-     * @param p A given position
-     * @param radius The radius distance around the given posiitn p
-     * @param minH[out] The mininal terrain height in the radius
-     * @param maxH[out] The maximal terrain height in the radius
-     * @param is_match[out] Whether or not find terrain association in radius
-     * @return The average terrain height
+     * @param p A given position 给定查询点
+     * @param radius The radius distance around the given posiitn p 搜索范围，领域大小
+     * @param minH[out] The mininal terrain height in the radius 邻域中最小高程值
+     * @param maxH[out] The maximal terrain height in the radius 邻域中最大高程值
+     * @param is_match[out] Whether or not find terrain association in radius 是否在邻域中搜索到了有效点
+     * @return The average terrain height 返回邻域范围的平均高程值
      */
     template <typename Position>
     static inline float NearestHeightOfRadius(const Position& p, const float& radius, float& minH, float& maxH, bool& is_matched) {
         std::vector<int> pIdxK;
-        std::vector<float> pdDistK;
+        std::vector<float> pdDistK; // 近邻点到查询点的平方距离
         PCLPoint pcl_p;
         pcl_p.x = p.x, pcl_p.y = p.y, pcl_p.z = 0.0f, pcl_p.intensity = 0.0f;
         minH = maxH = p.z;
         is_matched = false;
-        if (kdtree_terrain_clould_->radiusSearch(pcl_p, radius, pIdxK, pdDistK) > 0) {
-            float avgH = kdtree_terrain_clould_->getInputCloud()->points[pIdxK[0]].intensity;
+        if (kdtree_terrain_clould_->radiusSearch(pcl_p, radius, pIdxK, pdDistK) > 0) { // radiusSearch返回值为找到的近邻点数量
+            float avgH = kdtree_terrain_clould_->getInputCloud()->points[pIdxK[0]].intensity; // 这里的intensity被赋值为高程值
             minH = maxH = avgH;
             for (std::size_t i=1; i<pIdxK.size(); i++) {
                 const float temp = kdtree_terrain_clould_->getInputCloud()->points[pIdxK[i]].intensity;
@@ -72,9 +72,9 @@ public:
             }
             avgH /= (float)pIdxK.size();
             is_matched = true;
-            return avgH;
+            return avgH; // 如果查询到了最近邻点，就返回这些点的平均高程值
         }
-        return p.z;
+        return p.z; // 没有查询到符合要求的最近邻点，直接返回查询点的z坐标
     }
 
     /** Update global cloud grid with incoming clouds 
@@ -139,6 +139,7 @@ private:
     PointCloudPtr flat_terrain_cloud_;  // 平坦地形点云
     static PointKdTreePtr kdtree_terrain_clould_; // kd树地形点云
 
+    // 查询给定点最近的地形高度
     template <typename Position>
     static inline float NearestHeightOfPoint(const Position& p, float& dist_square) {
         // Find the nearest node in graph
@@ -152,7 +153,7 @@ private:
             dist_square = pdDistK[0];
             return pcl_p.intensity;
         }
-        return p.z;
+        return p.z; // 查询不到返回原值
     }
 
     void SetTerrainHeightGridOrigin(const Point3D& robot_pos);
