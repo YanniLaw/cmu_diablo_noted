@@ -22,12 +22,22 @@ namespace arise_slam {
         node_ = node;
     }
 
+    /**
+     * @brief 
+     * 
+     * @param initialization 是否初始化成功
+     * @param predictodom  预测源
+     * @param position 输入预测值，输出匹配值
+     * @param edge_point not used when livox
+     * @param planner_point 点云数据(sensor frame下)
+     * @param timeLaserOdometry 当前匹配的时间
+     */
     void LidarSLAM::Localization(bool initialization, PredictionSource predictodom, Transformd position,
                                  pcl::PointCloud<Point>::Ptr edge_point, // not used
                                  pcl::PointCloud<Point>::Ptr planner_point,double timeLaserOdometry) {
         bInitilization = initialization;
         T_w_lidar = position;
-        Transformd T_w_inital_guess(T_w_lidar);
+        Transformd T_w_inital_guess(T_w_lidar); // 预测值
 
        
 
@@ -47,7 +57,7 @@ namespace arise_slam {
             this->PlanarsPoints->push_back(p);
         }
 
-        if (not bInitilization) {
+        if (not bInitilization) { // 未初始化就往local map中添加点云数据(转换到map系)
             localMap.setOrigin(T_w_lidar.pos);
 
             this->WorldEdgesPoints->clear();
@@ -73,12 +83,12 @@ namespace arise_slam {
             lasttimeLaserOdometry=timeLaserOdometry;
         } else {
 
-
+            // 滑动地图，返回机器人在地图网格中的索引
             this->pos_in_localmap = localMap.shiftMap(T_w_lidar.pos);
             T_w_curr=this->T_w_lidar.pos;
             Q_w_curr=T_w_lidar.rot;
             
-
+            // 计算机器人在当前位置索引附近5X5X3的Local Map网格中特征点的数量
             auto[edgePointsFromMapNum, planarPointsFromMapNum] =
             localMap.get5x5LocalMapFeatureSize(this->pos_in_localmap);
         
@@ -95,7 +105,7 @@ namespace arise_slam {
             //tbb::concurrent_vector<OptimizationParameter> OptimizationData;
 
             OptimizationData.clear();
-            if (planarPointsFromMapNum > 50) {
+            if (planarPointsFromMapNum > 50) { // 点数足够就开启匹配
 
                 for (size_t icpIter = 0; icpIter < this->LocalizationICPMaxIter; ++icpIter) {
                     arise_slam_mid360_msgs::msg::IterationStats iter_stats;
@@ -103,7 +113,7 @@ namespace arise_slam {
                     Good_Planner_Feature_Num = 0;
              
                      //TODO: Achieve the TBB to acclerate the process
-                    if (not this->EdgesPoints->empty()) {
+                    if (not this->EdgesPoints->empty()) { // 有边缘特征点
                     //     auto compute_func = [this](const tbb::blocked_range<size_t> &range) {
                         for (size_t edge_index = 0;
                              edge_index != this->EdgesPoints->points.size(); edge_index++) {
@@ -128,15 +138,15 @@ namespace arise_slam {
                     double sampling_rate = -1.0;
                     int laserCloudSurfStackNum=this->PlanarsPoints->points.size();
 
-                    if(laserCloudSurfStackNum > OptSet.max_surface_features)
+                    if(laserCloudSurfStackNum > OptSet.max_surface_features) // 平面特征点超过阈值，计算采样率
                         sampling_rate = 1.0*OptSet.max_surface_features/laserCloudSurfStackNum;
 
-                    if (not this->PlanarsPoints->empty()) {
+                    if (not this->PlanarsPoints->empty()) { // 有平面特征点
                             // auto compute_func = [this](const tbb::blocked_range<size_t>&range) {
                         for (size_t planar_index = 0;
                              planar_index != this->PlanarsPoints->points.size();
                              planar_index++) {
-                            if(sampling_rate>0.0)
+                            if(sampling_rate>0.0) // 近似均匀采样
                             {
                                 double remainder = fmod(planar_index*sampling_rate, 1.0);
                                 if (remainder + 0.001 > sampling_rate)
@@ -625,6 +635,7 @@ namespace arise_slam {
         // Rigid transform or time continuous motion model to take into
         // account the rolling shutter distortion
         Eigen::Vector3d pInit, pFinal;
+        // pInit 就是p ， pFinal 转换到世界坐标系下的p
         this->ComputePointInitAndFinalPose(MatchingMode::LOCALIZATION, p, pInit,
                                            pFinal);
 
@@ -636,17 +647,18 @@ namespace arise_slam {
 
         //significantlyFactor1 = this->LocalizationPlaneDistancefactor1;
         //significantlyFactor2 = this->LocalizationPlaneDistancefactor2;
-        requiredNearest = this->LocalizationPlaneDistanceNbrNeighbors;
+        requiredNearest = this->LocalizationPlaneDistanceNbrNeighbors; // 查找最近邻个数
         squredMaxDist = 3*local_map.planeRes_;
 
-        std::vector<Point> nearest_pts;
-        std::vector<float> nearest_dist;
+        std::vector<Point> nearest_pts; // 查找到的最近邻点
+        std::vector<float> nearest_dist; // 查找到的最近邻距离
 
-        Point pFinal_query;
+        Point pFinal_query; // 查询点
         pFinal_query.x = pFinal.x();
         pFinal_query.y = pFinal.y();
         pFinal_query.z = pFinal.z();
 
+        // 最近邻查找
         TicToc kdtree_query_feature_time;
         auto bFind = local_map.nearestKSearchSurf(pFinal_query, nearest_pts,
                                                   nearest_dist, requiredNearest);
@@ -667,7 +679,7 @@ namespace arise_slam {
         }
 
 #if 1
-        if (nearest_dist.back() > squredMaxDist) {
+        if (nearest_dist.back() > squredMaxDist) { // 查找到的距离是按照升序排序的
             result.match_result = MatchingResult::NEIGHBORS_TOO_FAR;
             return result;
         }
@@ -679,7 +691,7 @@ namespace arise_slam {
         // Thanks to the PCA, we will check the shape of the neighborhood
         // and keep it if it is will distributed along a plane.
 #if 1
-        Eigen::MatrixXd data(requiredNearest, 3);
+        Eigen::MatrixXd data(requiredNearest, 3); // 5行3列
         for (size_t k = 0; k < requiredNearest; k++) {
             const Point &pt = nearest_pts[k];
             data.row(k) << pt.x, pt.y, pt.z;
@@ -688,7 +700,7 @@ namespace arise_slam {
         Eigen::Vector3d mean;
         Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig = ComputePCA(data, mean);
 
-        // PCA eigenvalues
+        // PCA eigenvalues  升序排列
         Eigen::Vector3d D = eig.eigenvalues();
 #endif
 
@@ -749,10 +761,11 @@ namespace arise_slam {
                 }
             }
         }
-
+        // 拟合平面并求解法向量
+        // ax + by + cz + d = 0 [a,b,c]就是法向量，d这里取1
         Eigen::Vector3d norm = matA0.colPivHouseholderQr().solve(matB0);
-        double negative_OA_dot_norm = 1 / norm.norm();
-        norm.normalize();
+        double negative_OA_dot_norm = 1 / norm.norm(); // 1 / sqrt(a*a+b*b+c*c) 模长的倒数，便于后续计算点到平面距离
+        norm.normalize(); // 法向量归一化
 
         bool planeValid = true;
         double point_to_plane_dis;
@@ -760,7 +773,7 @@ namespace arise_slam {
         for (int j = 0; j < 5; j++) {
             // if OX * n > 0.2, then plane is not fit well
             point_to_plane_dis=fabs(norm(0) * nearest_pts.at(j).x + norm(1) * nearest_pts.at(j).y +
-                                  norm(2) * nearest_pts.at(j).z + negative_OA_dot_norm);
+                                  norm(2) * nearest_pts.at(j).z + negative_OA_dot_norm); // distance = |n* p + d| / ||n|| (这里||n||归一化了)
             if (point_to_plane_dis> localMap.planeRes_/2.0) {
                 planeValid = false;
                 break;
@@ -776,7 +789,7 @@ namespace arise_slam {
        
         meanSquaredDist /= 5;
 
-        double fitQualityCoeff = 1.0 - sqrt(meanSquaredDist / squredMaxDist);
+        double fitQualityCoeff = 1.0 - sqrt(meanSquaredDist / squredMaxDist); // 计算拟合质量
 
         pcaFeature feature;
 
@@ -789,11 +802,13 @@ namespace arise_slam {
 
         // TODO: need to double check if the normal is correct
 
+        // eigenvectors() 返回的是一个 3x3 的正交矩阵（每列是一个单位向量），表示主方向
+        // Eigen 默认返回升序排列的特征值与其对应的特征向量
         Eigen::Vector3d correct_normal;
         //Eigen::Vector3d curr_point(pInit.x(), pInit.y(), pInit.z());
         Eigen::Vector3d curr_point(pFinal.x(), pFinal.y(), pFinal.z());
         Eigen::Vector3d viewpoint_direction = curr_point;
-        Eigen::Vector3d normal=eig.eigenvectors().col(0);
+        Eigen::Vector3d normal=eig.eigenvectors().col(0); // 对应最小特征值的特征向量
         double dot_product = viewpoint_direction.dot(normal);
         correct_normal=normal;
         if (dot_product < 0)
@@ -802,7 +817,7 @@ namespace arise_slam {
 #if 1
         //TODO: Move feature observability analysis to debug cpp files
         this->FeatureObservabilityAnalysis(
-                feature, pFinal, D, correct_normal, eig.eigenvectors().col(2));
+                feature, pFinal, D, correct_normal, eig.eigenvectors().col(2)); // 最大特征值的特征向量
 #endif
 
 

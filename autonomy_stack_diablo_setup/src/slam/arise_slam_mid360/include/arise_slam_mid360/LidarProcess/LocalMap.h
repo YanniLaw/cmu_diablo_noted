@@ -474,9 +474,10 @@ public:
     }  // function nearestKSearchSpecificLinePoint
 
     /// \brief 检索最近邻的surf点
-    /// \param pt_query
-    /// \param k_indices
-    /// \param k_sqr_distances
+    /// \param pt_query 查询点
+    /// \param k_indices 最近邻的索引数组
+    /// \param k_sqr_distances 最近邻的距离数组
+    /// \param num_nearest_search 要查询的近邻个数
     /// \return
     bool nearestKSearchSurf(const Point &pt_query,
                             std::vector<Point> &k_pts,

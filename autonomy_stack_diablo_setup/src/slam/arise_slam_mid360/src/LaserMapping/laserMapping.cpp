@@ -426,7 +426,7 @@ namespace arise_slam {
        
         mBuf.lock();
         cornerLastBuf.push(msgIn->cloud_corner);    // not used
-        surfLastBuf.push(msgIn->cloud_surface);     // 去畸变后且滤波的点云
+        surfLastBuf.push(msgIn->cloud_surface);     // 去畸变后且滤波的点云 都位于sensor坐标系下
         realsenseBuf.push(msgIn->cloud_realsense);  // not used
         fullResBuf.push(msgIn->cloud_nodistortion); // 原始点云
         Eigen::Quaterniond imuprediction_tmp(msgIn->initial_quaternion_w, msgIn->initial_quaternion_x,
@@ -550,7 +550,7 @@ namespace arise_slam {
         odomAvailable = extractVisualIMUOdometryAndCheck(T_w_lidar);
         if (odomAvailable) {
             return;
-        } else {
+        } else { // 只预测角度，对于位置不做预测，在已知地图中容易出现漂移
             // use the incremental imu orientation as the initial guess
             if (imuorientationAvailable == true)
             {
@@ -1269,7 +1269,7 @@ namespace arise_slam {
                 slam.frame_count=frameCount;
                 slam.laser_imu_sync=laser_imu_sync;
 
-                initialization = true;
+                initialization = true; // 经过第一次local slam 就初始化完成
 #if 0
                 LOG(INFO)<<"\033[1;32m Laser observation analysis.\033[0m";
                 LOG(INFO)<<"rx_cross: "<<slam.PlaneFeatureHistogramObs.at(0);

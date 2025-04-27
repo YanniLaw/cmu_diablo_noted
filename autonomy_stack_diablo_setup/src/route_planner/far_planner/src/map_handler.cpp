@@ -252,6 +252,14 @@ void MapHandler::UpdateFreeCloudGrid(const PointCloudPtr& freeCloudIn){
     }
 }
 
+/**
+ * @brief 查询给定点所处的地形高度信息
+ * 
+ * @param p 给定三维点
+ * @param is_matched 查询点是否处于可通行网格中
+ * @param is_search 是否通过搜索查找附近的最近邻网格地形高度
+ * @return float 返回查询到的地形高度值，未查询到则返回原z值
+ */
 float MapHandler::TerrainHeightOfPoint(const Point3D& p, bool& is_matched, const bool& is_search) {
     is_matched = false;
     const Eigen::Vector3i sub = terrain_height_grid_->Pos2Sub(Eigen::Vector3d(p.x, p.y, 0.0f));
@@ -362,6 +370,7 @@ void MapHandler::AdjustCTNodeHeight(const CTNodeStack& ctnodes) {
     const float H_MIN = FARUtil::robot_pos.z - FARUtil::kTolerZ;
     for (auto& ctnode_ptr : ctnodes) {
         float min_th, max_th;
+        // 查询节点位置附近范围内的最近邻点(地形点)
         NearestHeightOfRadius(ctnode_ptr->position, FARUtil::kMatchDist, min_th, max_th, ctnode_ptr->is_ground_associate);
         if (ctnode_ptr->is_ground_associate) { // 在该范围内搜索到了最近邻点，节点与地面有关
             ctnode_ptr->position.z = min_th + FARUtil::vehicle_height;

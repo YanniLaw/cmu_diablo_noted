@@ -185,11 +185,11 @@ namespace {
     inline Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>
     ComputePCA(const Eigen::Matrix<double, Eigen::Dynamic, 3> &data,
                Eigen::Vector3d &mean) {
-        mean = data.colwise().mean();
-        Eigen::MatrixXd centered = data.rowwise() - mean.transpose();
-        Eigen::Matrix3d varianceCovariance = centered.transpose() * centered;
+        mean = data.colwise().mean(); // 计算质心，即每一列的平均值
+        Eigen::MatrixXd centered = data.rowwise() - mean.transpose(); // 减去质心，中心化点云数据
+        Eigen::Matrix3d varianceCovariance = centered.transpose() * centered; // 计算协方差矩阵
 
-        return Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(varianceCovariance);
+        return Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(varianceCovariance); // 特征分解
     }
 
 //------------------------------------------------------------------------------

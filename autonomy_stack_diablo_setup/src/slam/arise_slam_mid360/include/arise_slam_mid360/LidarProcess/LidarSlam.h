@@ -208,17 +208,17 @@ namespace arise_slam {
 
         struct OptimizationParameter {
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-            MatchingResult match_result;
-            FeatureType feature_type;
-            pcaFeature feature;
-            Eigen::Matrix3d Avalue;
-            Eigen::Vector3d Pvalue;
-            Eigen::Vector3d Xvalue;
-            Eigen::Vector3d NormDir;
-            double negative_OA_dot_norm;
-            std::pair<Eigen::Vector3d, Eigen::Vector3d> corres;
-            double residualCoefficient;
-            double TimeValue;
+            MatchingResult match_result; // 匹配结果
+            FeatureType feature_type;   // 特征点类型(边缘点/平面点)
+            pcaFeature feature;         // 可观测特征
+            Eigen::Matrix3d Avalue;     // 
+            Eigen::Vector3d Pvalue;     // 匹配到的近邻点均值
+            Eigen::Vector3d Xvalue;     // 查询点
+            Eigen::Vector3d NormDir;    // 归一化的法向量
+            double negative_OA_dot_norm; // 模长的倒数
+            std::pair<Eigen::Vector3d, Eigen::Vector3d> corres; // 
+            double residualCoefficient; // 拟合质量
+            double TimeValue;           // 
         };
 
     public:
