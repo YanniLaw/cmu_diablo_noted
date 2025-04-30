@@ -45,7 +45,7 @@ public:
 
     /**
      * @brief Calculate the terrain height of a given point and radius around it
-     * 利用 KD-Tree 进行快速邻域搜索，计算一个点及其周围区域的最小、高度、最大高度和平均高度，并返回平均值。如果找不到有效地形点，则返回输入点的高度值
+     * 利用 KD-Tree 进行快速邻域搜索，计算一个点及其周围区域的最小高程值、最大高程值和平均高程值，并返回平均值。如果找不到有效地形点，则返回输入点的高度值
      * @param p A given position 给定查询点
      * @param radius The radius distance around the given posiitn p 搜索范围，领域大小
      * @param minH[out] The mininal terrain height in the radius 邻域中最小高程值
@@ -133,7 +133,7 @@ public:
 private:
     MapHandlerParams map_params_;
     int neighbor_Lnum_, neighbor_Hnum_; // 根据传感器测量范围计算的附近的网格数量(水平与垂直的网格数，不是一半)
-    Eigen::Vector3i robot_cell_sub_; // 机器人位置对应的网格索引
+    Eigen::Vector3i robot_cell_sub_; // 机器人实时位置对应的网格索引
     int INFLATE_N;
     bool is_init_ = false;
     PointCloudPtr flat_terrain_cloud_;  // 平坦地形点云

@@ -679,7 +679,7 @@ void FARMaster::OdomCallBack(const nav_msgs::msg::Odometry::SharedPtr msg) {
   is_odom_init_ = true;
 }
 
-// 点云处理，滤波+去掉异常值
+// 点云预处理，滤波+去掉异常值
 void FARMaster::PrcocessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc, const PointCloudPtr& cloudOut) 
 {
   pcl::PointCloud<PCLPoint> temp_cloud;
@@ -710,13 +710,13 @@ void FARMaster::PrcocessCloud(const sensor_msgs::msg::PointCloud2::SharedPtr pc,
 
 void FARMaster::ScanCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr scan_pc) {
   if (master_params_.is_static_env || !is_odom_init_) return; // 静态环境不使用scan数据
-  this->PrcocessCloud(scan_pc, FARUtil::cur_scan_cloud_);
+  this->PrcocessCloud(scan_pc, FARUtil::cur_scan_cloud_); // 点云预处理
   scan_handler_.UpdateRobotPosition(robot_pos_);
 }
 
 void FARMaster::TerrainLocalCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr pc) {
   if (master_params_.is_static_env) return;  // 静态环境不使用地形分析数据
-  this->PrcocessCloud(pc, local_terrain_ptr_);
+  this->PrcocessCloud(pc, local_terrain_ptr_);  // 点云预处理
   FARUtil::ExtractFreeAndObsCloud(local_terrain_ptr_, FARUtil::local_terrain_free_, FARUtil::local_terrain_obs_); //TODO 发布出来看看效果
 }
 
@@ -726,24 +726,28 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
   map_handler_.UpdateRobotPosition(FARUtil::robot_pos);
   if (!is_stop_update_) { // 更新可视图
     this->PrcocessCloud(pc, temp_cloud_ptr_);
-    // 提取机器人附近地形分析点云数据
+    // 提取机器人附近范围内地形分析点云数据 [terrain_range, terrain_range, kTolerZ]
+    // map_params_.height_voxel_dim = master_params_.voxel_dim * 2.0f; // 0.2
+    // FARUtil::kHeightVoxel    = map_params_.height_voxel_dim; // 0.2
+    // FARUtil::kTolerZ = map_params_.floor_height - FARUtil::kHeightVoxel; // 1.0 - 0.2 = 0.8
     FARUtil::CropBoxCloud(temp_cloud_ptr_, robot_pos_, Point3D(master_params_.terrain_range,
                                                                master_params_.terrain_range,
                                                                FARUtil::kTolerZ));
     // 按高程值对地形分析点云进行分类提取
     FARUtil::ExtractFreeAndObsCloud(temp_cloud_ptr_, temp_free_ptr_, temp_obs_ptr_);
-    // 在动态环境中，去除重叠的障碍物点云(只对当前提取出来的障碍物点云进行处理，原地操作保存在temp_obs_ptr_中)
+    // 在动态环境中，去除障碍物点云中与保存的动态障碍物点云中重叠的点(只对当前提取出来的障碍物点云进行处理，原地操作保存在temp_obs_ptr_中)
     // 去除temp_obs_ptr_中与stack_dyobs_cloud_存在重叠的点(扣掉这些点)，这里temp_obs_ptr_的Intensity属性被修改了255
     if (!master_params_.is_static_env) {
       FARUtil::RemoveOverlapCloud(temp_obs_ptr_, FARUtil::stack_dyobs_cloud_, true);
     }
-    map_handler_.UpdateObsCloudGrid(temp_obs_ptr_); // 除了更新障碍物网格之外还对 temp_obs_ptr_ 进一步过滤(只有在机器人附近网格的点才会保留)
-    map_handler_.UpdateFreeCloudGrid(temp_free_ptr_);
+    // TODO 应该先进行动态障碍物点云提取然后再更新哦
+    map_handler_.UpdateObsCloudGrid(temp_obs_ptr_);   // 更新全局障碍物网格，只更新机器人附近的障碍物网格(过滤掉temp_obs_ptr_处于机器人附近网格之外的点)
+    map_handler_.UpdateFreeCloudGrid(temp_free_ptr_); // 将所有free点填充到全局free点云网格中
     // extract new points
-    // 提取新出现的障碍物点云(去掉temp_obs_ptr_中跟surround_obs_cloud_重合的点，存放在cur_new_cloud_中)
-    FARUtil::ExtractNewObsPointCloud(temp_obs_ptr_, // 0 属性做了修改
-                                     FARUtil::surround_obs_cloud_, // 255 表示上一次处理时附近的障碍物点云
-                                     FARUtil::cur_new_cloud_); // 与surround_obs_cloud_拼接后 再进行滤波
+    // 提取附近新出现的障碍物点云(去掉temp_obs_ptr_中跟surround_obs_cloud_重合的点，存放在cur_new_cloud_中)
+    FARUtil::ExtractNewObsPointCloud(temp_obs_ptr_,                // 当前帧障碍物点云
+                                     FARUtil::surround_obs_cloud_, // 表示上一次处理时附近的全局障碍物点云数据
+                                     FARUtil::cur_new_cloud_);     // 当前帧新出现的障碍物点云
   } else { // stop env update
     temp_cloud_ptr_->clear();
     FARUtil::cur_new_cloud_->clear();
@@ -751,7 +755,7 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
   // extract surround free cloud & update terrain height
   map_handler_.GetSurroundFreeCloud(FARUtil::surround_free_cloud_);
   map_handler_.UpdateTerrainHeightGrid(FARUtil::surround_free_cloud_, terrain_height_ptr_);
-  // update surround obs cloud 更新机器人附近的障碍物点云
+  // update surround obs cloud 获取更新后的位于机器人附近网格的障碍物点云
   map_handler_.GetSurroundObsCloud(FARUtil::surround_obs_cloud_);
   // extract dynamic obstacles
   FARUtil::cur_dyobs_cloud_->clear();

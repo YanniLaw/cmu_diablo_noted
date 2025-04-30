@@ -208,7 +208,11 @@ void MapHandler::GetSurroundFreeCloud(const PointCloudPtr& freeCloudOut) {
     }
 }
 
-// 更新障碍物点云网格(提取obsCloudInOut中处于机器人附近的点)
+/**
+ * @brief 更新world全局障碍物点云网格(提取obsCloudInOut中处于机器人附近网格中的点，填充至网格中)
+ * 更新的逻辑还是与下面更新free点云网格有所区别的！
+ * @param obsCloudInOut 输入的是障碍物点云(高程值大于一定阈值)，输出的是过滤后处于机器人附近网格中的障碍物点云
+ */
 void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
     if (!is_init_ || obsCloudInOut->empty()) return;
     // 先将网格索引列表的元素都置零
@@ -219,7 +223,7 @@ void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
         Eigen::Vector3i sub = world_obs_cloud_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         if (!world_obs_cloud_grid_->InRange(sub)) continue;
         const int ind = world_obs_cloud_grid_->Sub2Ind(sub); // 转换为一维索引
-        // 如果该索引在机器人周围的索引列表范围内(这个索引列表是实时更新的)
+        // 如果该索引在机器人周围的网格索引列表范围内(这个索引列表是odom更新时一起更新的)
         if (neighbor_obs_indices_.find(ind) != neighbor_obs_indices_.end()) {
             world_obs_cloud_grid_->GetCell(ind)->points.push_back(point); // 将该有效点添加进网格的障碍物点云中
             obs_valid_ptr->points.push_back(point);
@@ -228,13 +232,17 @@ void MapHandler::UpdateObsCloudGrid(const PointCloudPtr& obsCloudInOut) {
         }
     }
     *obsCloudInOut = *obs_valid_ptr;
-    // Filter Modified Ceils 对刚添加的障碍物网格点云进行滤波
+    // Filter Modified Ceils 对刚更新的障碍物网格内点云进行滤波
     for (int i = 0; i < world_obs_cloud_grid_->GetCellNumber(); ++i) {
       if (util_obs_modified_list_[i] == 1) FARUtil::FilterCloud(world_obs_cloud_grid_->GetCell(i), FARUtil::kLeafSize);
     }
 }
 
-// 更新free点云网格 步骤同上
+/**
+ * @brief 更新world全局free点云网格(提取freeCloudIn中处于机器人附近网格中的点，填充至网格中)
+ * 在更新全局obs点云网格的时候，只会考虑处于附近网格的点，但是在更新free点云网格的时候，是填充所有的free点！！！
+ * @param freeCloudIn 输入的是free点云(高程值小于一定阈值)
+ */
 void MapHandler::UpdateFreeCloudGrid(const PointCloudPtr& freeCloudIn){
     if (!is_init_ || freeCloudIn->empty()) return;
     std::fill(util_free_modified_list_.begin(), util_free_modified_list_.end(), 0);
@@ -391,8 +399,9 @@ void MapHandler::ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_o
         const Point3D pos = Point3D(world_obs_cloud_grid_->Ind2Pos(idx)); // 计算该索引物理位置
         bool inRange = false;
         float minH, maxH;
-        NearestHeightOfRadius(pos, R, minH, maxH, inRange);
-        if (inRange && pos.z + map_params_.cell_height > minH &&
+        // 半径查找，查找该网格中心点附近的最小/最大/平均高程值
+        NearestHeightOfRadius(pos, R, minH, maxH, inRange); // 其实就是找出该osb世界点云网格内的最小/最大/平均高程值
+        if (inRange && pos.z + map_params_.cell_height > minH && // map_params_.cell_height = map_params_.floor_height / 2.5f = 0.4
                        pos.z - map_params_.cell_height < maxH + FARUtil::kTolerZ) // use map_params_.cell_height/2.0 as a tolerance margin
         {
             neighbor_obs.insert(idx);
@@ -412,22 +421,28 @@ void MapHandler::ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_o
     }
 }
 
+/**
+ * @brief 更新机器人地形高度网格地图
+ * 
+ * @param freeCloudIn 输入的是机器人附近的全局free网格内的点云
+ * @param terrainHeightOut 输出的地形高度点云数据
+ */
 void MapHandler::UpdateTerrainHeightGrid(const PointCloudPtr& freeCloudIn, const PointCloudPtr& terrainHeightOut) {
     if (freeCloudIn->empty()) return;
     PointCloudPtr copy_free_ptr(new pcl::PointCloud<PCLPoint>());
     pcl::copyPointCloud(*freeCloudIn, *copy_free_ptr); // 拷贝点云
     FARUtil::FilterCloud(copy_free_ptr, terrain_height_grid_->GetResolution()); // [robot_dim,robot_dim, leaf_size]
-    std::fill(terrain_grid_occupy_list_.begin(), terrain_grid_occupy_list_.end(), 0); // 先置0，每轮都重新计算
+    std::fill(terrain_grid_occupy_list_.begin(), terrain_grid_occupy_list_.end(), 0); // 先置0，每轮都重新计算 该列表大小为地形高度网格的个数
     // 这里的方法类似于terrian analysis中的高程计算，在一个网格中放入多个点的z值
     for (const auto& point : copy_free_ptr->points) {
         // 先计算该free点在地形高度网格中的对应索引
         Eigen::Vector3i csub = terrain_height_grid_->Pos2Sub(Eigen::Vector3d(point.x, point.y, 0.0f));
         std::vector<Eigen::Vector3i> subs;
-        this->Expansion2D(csub, subs, INFLATE_N); // 扩展当前索引(膨胀)
+        this->Expansion2D(csub, subs, INFLATE_N); // 扩展当前索引(膨胀INFLATE_N个网格)
         for (const auto& sub : subs) {
-            if (!terrain_height_grid_->InRange(sub)) continue;
-            const int ind = terrain_height_grid_->Sub2Ind(sub);
-            if (terrain_grid_occupy_list_[ind] == 0) { // 首次访问该网格
+            if (!terrain_height_grid_->InRange(sub)) continue; // 因为在上一步计算索引以及膨胀的时候没有做检查
+            const int ind = terrain_height_grid_->Sub2Ind(sub); // 将该三维索引转换为一维的索引
+            if (terrain_grid_occupy_list_[ind] == 0) { // 如果本次函数调用中更新首次访问该地形高度网格
                 terrain_height_grid_->GetCell(ind).resize(1);
                 terrain_height_grid_->GetCell(ind)[0] = point.z; // 高程值，并非传统的z坐标值
             } else {
@@ -440,14 +455,14 @@ void MapHandler::UpdateTerrainHeightGrid(const PointCloudPtr& freeCloudIn, const
     if (terrainHeightOut->empty()) { // set terrain height kdtree
         FARUtil::ClearKdTree(flat_terrain_cloud_, kdtree_terrain_clould_);
     } else {
-        this->AssignFlatTerrainCloud(terrainHeightOut, flat_terrain_cloud_);
+        this->AssignFlatTerrainCloud(terrainHeightOut, flat_terrain_cloud_); // flat_terrain_cloud_ z轴置0，Intensity赋值为terrainHeightOut的高程值
         kdtree_terrain_clould_->setInputCloud(flat_terrain_cloud_);
     }
     // update surrounding obs cloud grid indices based on terrain
-    this->ObsNeighborCloudWithTerrain(neighbor_obs_indices_, extend_obs_indices_); // neighbor_obs_indices_ 在这里清空了
+    this->ObsNeighborCloudWithTerrain(neighbor_obs_indices_, extend_obs_indices_); // neighbor_obs_indices_ 在这里先清空，然后重新生成
 }
 
-// 可通行性分析，生成可通行稀疏点云
+// 可通行性分析，生成可通行网格的稀疏点云
 void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
     // 获取机器人当前位置在地形高程网格中索引
     const Eigen::Vector3i robot_sub = terrain_height_grid_->Pos2Sub(Eigen::Vector3d(FARUtil::robot_pos.x, 
@@ -460,16 +475,17 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
     const float H_THRED = map_params_.height_voxel_dim; // voxel_dim * 2.0 高度变化阈值
     std::fill(terrain_grid_traverse_list_.begin(), terrain_grid_traverse_list_.end(), 0); // 可通行网格列表，先置0
     // Lambda Function
+    // 是否拓展领域节点， cur_id 当前网格索引， ref_id 下一个领域网格索引
     auto IsTraversableNeighbor = [&] (const int& cur_id, const int& ref_id) {
-        if (terrain_grid_occupy_list_[ref_id] == 0) return false; // 已经添加过了
+        if (terrain_grid_occupy_list_[ref_id] == 0) return false; // 本次地形分析中该网格内没有地形数据，也就是没有free点
         const float cur_h = terrain_height_grid_->GetCell(cur_id)[0];
         float ref_h = 0.0f;
         int counter = 0;
         for (const auto& e : terrain_height_grid_->GetCell(ref_id)) {
-            if (abs(e - cur_h) > H_THRED) continue;
+            if (abs(e - cur_h) > H_THRED) continue; // 待拓展网格高程值不能与当前地形高度网格相差太大
             ref_h += e, counter ++;
         }
-        if (counter > 0) {
+        if (counter > 0) { // 如果下一个待拓展的地形高度网格内有多个有效高程值，取其平均值
             terrain_height_grid_->GetCell(ref_id).resize(1);
             terrain_height_grid_->GetCell(ref_id)[0] = ref_h / (float)counter;
             return true;
@@ -479,7 +495,7 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
     // 添加索引到可通行网格列表中
     auto AddTraversePoint = [&] (const int& idx) {
         Eigen::Vector3d cpos = terrain_height_grid_->Ind2Pos(idx);
-        cpos.z() = terrain_height_grid_->GetCell(idx)[0]; // 为什么是添加网格第一个高程值？？
+        cpos.z() = terrain_height_grid_->GetCell(idx)[0]; // TODO:为什么是添加网格第一个高程值？？
         const PCLPoint p = FARUtil::Point3DToPCLPoint(Point3D(cpos));
         terrainHeightOut->points.push_back(p);
         terrain_grid_traverse_list_[idx] = 1;
@@ -498,17 +514,17 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
         q.pop_front();
         // 一般机器人位置所在的网格以及周围一些网格都是没有地形数据的(由于diablo激光雷达的安装方式，如果能打到地面的话会有一米的盲区)
         if (terrain_grid_occupy_list_[cur_id] != 0) { // 有地形free数据(本轮free point 所在的网格)
-            if (!is_robot_terrain_init) {
+            if (!is_robot_terrain_init) { // 未初始化
                 float avg_h = 0.0f;
                 int counter = 0;
-                for (const auto& e : terrain_height_grid_->GetCell(cur_id)) { // 一个网格里面可能有很多高程值
-                    if (abs(e - FARUtil::robot_pos.z + FARUtil::vehicle_height) > H_THRED) continue;
+                for (const auto& e : terrain_height_grid_->GetCell(cur_id)) { // 一个网格里面可能有很多高程值 free点高程值是小于一定阈值的
+                    if (abs(e - FARUtil::robot_pos.z + FARUtil::vehicle_height) > H_THRED) continue; // TODO 这个逻辑不太对！本身robot.z就在0附近
                     avg_h += e, counter ++;
                 }
                 if (counter > 0) {
-                    avg_h /= (float)counter; // 没有对该值进行检查，这里默认是机器人周围就是地面！！！ //TODO
+                    avg_h /= (float)counter; // 没有对该值进行检查，这里默认是机器人周围就是地面！！！
                     terrain_height_grid_->GetCell(cur_id).resize(1);
-                    terrain_height_grid_->GetCell(cur_id)[0] = avg_h;
+                    terrain_height_grid_->GetCell(cur_id)[0] = avg_h; // 取平均值
                     AddTraversePoint(cur_id);
                     is_robot_terrain_init = true; // init terrain height map current robot height
                     q.clear(); // 初始化成功，清除队列，以该索引为中心重新进行传播
@@ -526,7 +542,7 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
             ref_sub.x() += dx[i], ref_sub.y() += dy[i];
             if (!terrain_height_grid_->InRange(ref_sub)) continue;
             const int ref_id = terrain_height_grid_->Sub2Ind(ref_sub);
-            // 两种情况下扩展搜索网格节点: 1. 网格没有被遍历过; 2. 地形高度还未被初始化 或者 下个节点是可通行的
+            // 需要满足两种情况下才会扩展搜索网格节点: 1. 网格没有被遍历过; 2. 地形高度还未被初始化 或者 下个节点是可通行的
             // 地形高度还未被初始化(!is_robot_terrain_init) 这种情况是刚开始搜索时，机器人网格附近都没有数据
             // 地形高度初始化后，则根据后面IsTraversableNeighbor 来进行判断是否要将邻域节点加入到队列中进行传播
             if (!visited_set.count(ref_id) && (!is_robot_terrain_init || IsTraversableNeighbor(cur_id, ref_id))) {
