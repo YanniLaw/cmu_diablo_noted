@@ -64,7 +64,7 @@ typedef std::vector<CTNodePtr> CTNodeStack;
 struct NavNode
 {
     NavNode() = default;
-    std::size_t id;
+    std::size_t id;     // 节点唯一ID
     Point3D position;   // 节点位置
     PointPair surf_dirs;
     std::deque<Point3D> pos_filter_vec;

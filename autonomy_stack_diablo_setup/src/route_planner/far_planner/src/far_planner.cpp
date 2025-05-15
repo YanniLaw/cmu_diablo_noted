@@ -756,21 +756,21 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
   map_handler_.GetSurroundFreeCloud(FARUtil::surround_free_cloud_);
   map_handler_.UpdateTerrainHeightGrid(FARUtil::surround_free_cloud_, terrain_height_ptr_);
   // update surround obs cloud 获取更新后的位于机器人附近网格的障碍物点云
-  map_handler_.GetSurroundObsCloud(FARUtil::surround_obs_cloud_);
+  map_handler_.GetSurroundObsCloud(FARUtil::surround_obs_cloud_); // 上一步更新地形高度网格对附近障碍物网格索引列表有影响
   // extract dynamic obstacles
   FARUtil::cur_dyobs_cloud_->clear();
   if (!master_params_.is_static_env && !is_stop_update_) {
     this->ExtractDynamicObsFromScan(FARUtil::cur_scan_cloud_, // scan回调更新
                                     FARUtil::surround_obs_cloud_, // UpdateObsCloudGrid填值, GetSurroundObsCloud 获得
                                     FARUtil::surround_free_cloud_, // UpdateFreeCloudGrid填值, GetSurroundFreeCloud 获得
-                                    FARUtil::cur_dyobs_cloud_);
+                                    FARUtil::cur_dyobs_cloud_); // 从附近的障碍物点云中提取出的当前帧动态障碍物点云
     if (int(FARUtil::cur_dyobs_cloud_->size()) > FARUtil::kDyObsThred) { // kDyObsThred 是 dyosb_update_thred 参数
       if (FARUtil::IsDebug) RCLCPP_WARN(nh_->get_logger(), "FARMaster: dynamic obstacle detected, size: %ld", FARUtil::cur_dyobs_cloud_->size());
       FARUtil::InflateCloud(FARUtil::cur_dyobs_cloud_, master_params_.voxel_dim, 1, true); // 动态障碍物点云膨胀
       map_handler_.RemoveObsCloudFromGrid(FARUtil::cur_dyobs_cloud_); // 去掉障碍物点云网格world_obs_cloud_grid_中跟动态障碍物点云重叠的点
       FARUtil::RemoveOverlapCloud(FARUtil::surround_obs_cloud_, FARUtil::cur_dyobs_cloud_); // 去掉附近障碍物点云中跟动态障碍物点云重叠的点
       FARUtil::FilterCloud(FARUtil::cur_dyobs_cloud_, master_params_.voxel_dim);
-      // update new cloud，更新新的障碍物点云
+      // update new cloud，更新新的障碍物点云 =  新出现的障碍物 + 动态障碍物
       *FARUtil::cur_new_cloud_ += *FARUtil::cur_dyobs_cloud_;
       FARUtil::FilterCloud(FARUtil::cur_new_cloud_, master_params_.voxel_dim);
     }
@@ -790,18 +790,26 @@ void FARMaster::TerrainCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr p
   planner_viz_.VizPointCloud(surround_free_debug_, FARUtil::surround_free_cloud_);
   planner_viz_.VizPointCloud(surround_obs_debug_,  FARUtil::surround_obs_cloud_);
   planner_viz_.VizPointCloud(terrain_height_pub_, terrain_height_ptr_);
-  // visualize map grid 可视化相邻障碍物点云网格与所有的障碍物点云网格中心点
+  // visualize map grid 可视化附近障碍物点云网格与所有的障碍物点云网格中心点 /viz_grid_map_topic
   PointStack neighbor_centers, occupancy_centers;
-  map_handler_.GetNeighborCeilsCenters(neighbor_centers);
-  map_handler_.GetOccupancyCeilsCenters(occupancy_centers);
+  map_handler_.GetNeighborCeilsCenters(neighbor_centers);   // Green
+  map_handler_.GetOccupancyCeilsCenters(occupancy_centers); // Red
   planner_viz_.VizMapGrids(neighbor_centers, occupancy_centers, map_params_.cell_length, map_params_.cell_height);
   // DBBUG visual raycast grids
   if (!master_params_.is_static_env) {
     scan_handler_.GridVisualCloud(scan_grid_ptr_, GridStatus::RAY); // 提取RAY_BIT的相关网格存到scan_grid_ptr_中
-    planner_viz_.VizPointCloud(scan_grid_debug_, scan_grid_ptr_);
+    planner_viz_.VizPointCloud(scan_grid_debug_, scan_grid_ptr_); // 话题/FAR_scanGrid_debug 
   }
 }
 
+/**
+ * @brief 根据当前帧scan点云以及附近的free点云，从附近的障碍物点云中提取出动态障碍物
+ * 
+ * @param scanCloudIn   输入当前帧scan点云
+ * @param obsCloudIn    机器人附近的obs点云
+ * @param freeCloudIn   机器人附近的free点云
+ * @param dyObsCloudOut 提取出的当前帧动态障碍物点云
+ */
 void FARMaster::ExtractDynamicObsFromScan(const PointCloudPtr& scanCloudIn, 
                                           const PointCloudPtr& obsCloudIn,
                                           const PointCloudPtr& freeCloudIn,

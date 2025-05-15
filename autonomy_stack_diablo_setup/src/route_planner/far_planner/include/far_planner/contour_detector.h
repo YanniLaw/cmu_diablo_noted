@@ -78,10 +78,10 @@ private:
                                      std::size_t& refined_idx)
     {
         if (refined_idx < 2) return;
-        // 判断前一个点是否是顶点 即 三个点的夹角
-        if (!IsPrevWallVertex(contour[refined_idx-2], contour[refined_idx-1], add_p)) { // 夹角小于一定值
+        // 判断这三个点是否为同一个墙面的点
+        if (!IsPrevWallVertex(contour[refined_idx-2], contour[refined_idx-1], add_p)) { // 三个点的夹角小于一定值，非同一墙面
             return;
-        } else { // 夹角较大
+        } else { // 夹角较大，处于同一墙面，则进一步处理
             -- refined_idx;
             RemoveWallConnection(contour, add_p, refined_idx);
         }
@@ -109,6 +109,7 @@ private:
         }
     }
 
+    // 将输入的3D点转换为opencv图像坐标
     template <typename Point>
     inline cv::Point2f ConvertPoint3DToCVPoint(const Point& p, 
                                                const Point3D& c_pos,
@@ -122,7 +123,7 @@ private:
     }
 
     // 根据给定的 posIn 和 c_posIn 计算在图像中的行列索引，并考虑图像缩放以及边界处理
-    // c_posIn 是机器人位置，同时也是整个图像的中心
+    // c_posIn 是机器人位置，同时也是整个图像的中心 is_crop_idx 裁剪索引，其实就是边界检测
     template <typename Point>
     inline void PointToImgSub(const Point& posIn, const Point3D& c_posIn,
                               int& row_idx, int& col_idx,
@@ -183,6 +184,7 @@ private:
         img_counter_ ++;
     }
 
+    // 判断三个点是否处于同一面墙
     inline bool IsPrevWallVertex(const cv::Point2f& first_p,
                                  const cv::Point2f& mid_p,
                                  const cv::Point2f& add_p)

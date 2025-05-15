@@ -12,11 +12,11 @@ struct TerrainPlannerParams {
     int   inflate_size;
 };
 
-struct TerrainNode {
+struct TerrainNode { // 地形节点
     TerrainNode() = default;
-    int id;
-    Point3D position;
-    bool is_occupied;
+    int id;             // 节点id，每个网格有个唯一的id
+    Point3D position;   // 节点位置
+    bool is_occupied;   // 节点是否被占据
     float fscore;
     float gscore;
     std::shared_ptr<TerrainNode> parent;

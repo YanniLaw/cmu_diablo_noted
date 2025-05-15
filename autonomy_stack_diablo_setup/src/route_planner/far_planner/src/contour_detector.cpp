@@ -29,36 +29,44 @@ void ContourDetector::Init(const ContourDetectParams& params) {
     VOXEL_DIM_INV = 1.0f / cd_params_.voxel_dim;
 }
 
+/**
+ * @brief 构建地形图像 并 提取轮廓
+ * 
+ * @param odom_node_ptr     odom节点
+ * @param surround_cloud    机器人附近的障碍物点云
+ * @param realworl_contour  提取出来的轮廓
+ */
 void ContourDetector::BuildTerrainImgAndExtractContour(const NavNodePtr& odom_node_ptr,
                                                        const PointCloudPtr& surround_cloud,
                                                        std::vector<PointStack>& realworl_contour) {
     CVPointStack cv_corners;
     PointStack corner_vec;
-    this->UpdateOdom(odom_node_ptr);
-    this->ResetImgMat(img_mat_);
-    this->UpdateImgMatWithCloud(surround_cloud, img_mat_);
+    this->UpdateOdom(odom_node_ptr);    // 更新odom相关信息
+    this->ResetImgMat(img_mat_);        // 先重置图像
+    this->UpdateImgMatWithCloud(surround_cloud, img_mat_);  // 根据附近的obs点云更新轮廓检测的输入图像
     this->ExtractContourFromImg(img_mat_, refined_contours_, realworl_contour);
 }
 
 void ContourDetector::UpdateImgMatWithCloud(const PointCloudPtr& pc, cv::Mat& img_mat) {
     int row_idx, col_idx, inf_row, inf_col;
     const std::vector<int> inflate_vec{-1, 0, 1};
+    // TODO 需要对z值进行判断，以防高于机器人高度的点被当做障碍物提取出来影响路径规划
     for (const auto& pcl_p : pc->points) {
-        this->PointToImgSub(pcl_p, odom_pos_, row_idx, col_idx, false, false); // 因为下一步有判断，所以最后一个参数为false
+        this->PointToImgSub(pcl_p, odom_pos_, row_idx, col_idx, false, false); // 因为下一步有判断，所以最后一个参数可以为false
         if (!this->IsIdxesInImg(row_idx, col_idx)) continue;
         // 以当前点所在index为中心，向附近八邻域膨胀
         for (const auto& dr : inflate_vec) {
             for (const auto& dc : inflate_vec) {
                 inf_row = row_idx+dr, inf_col = col_idx+dc;
                 if (this->IsIdxesInImg(inf_row, inf_col)) {
-                    img_mat.at<float>(inf_row, inf_col) += 1.0; // TODO:是否可以加上权重值exp,这样可能会对窄通道有一定影响;z值是否限制
+                    img_mat.at<float>(inf_row, inf_col) += 1.0; // TODO:是否可以加上权重值exp,这样可能会对窄通道有一定影响;
                 }
             }
         }
     }
     // 动态环境下，对该图像进行二值化处理
     if (!FARUtil::IsStaticEnv) {
-        cv::threshold(img_mat, img_mat, cd_params_.kThredValue, 1.0, cv::ThresholdTypes::THRESH_BINARY);
+        cv::threshold(img_mat, img_mat, cd_params_.kThredValue, 1.0, cv::ThresholdTypes::THRESH_BINARY); // filter_count_value 参数
     }
     if (cd_params_.is_save_img) this->SaveCurrentImg(img_mat); // 保存二值化图像
 }
@@ -68,17 +76,18 @@ void ContourDetector::ResizeAndBlurImg(const cv::Mat& img, cv::Mat& Rimg) {
     cv::resize(Rimg, Rimg, cv::Size(), cd_params_.kRatio, cd_params_.kRatio, 
                cv::InterpolationFlags::INTER_LINEAR);
     //cv::morphologyEx(Rimg, Rimg, cv::MORPH_OPEN, getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3)));
-    // 均值滤波，平滑去噪 (滤波器窗口大小为kBlurSize)
+    // 均值滤波，平滑去噪 (滤波器窗口大小为kBlurSize) kBlurSize = robot_dim / 2.0f + voxel_dim
     cv::boxFilter(Rimg, Rimg, -1, cv::Size(cd_params_.kBlurSize, cd_params_.kBlurSize), cv::Point2i(-1, -1), false);
     //cv::morphologyEx(Rimg, Rimg, cv::MORPH_CLOSE, getStructuringElement(cv::MORPH_RECT, cv::Size(cd_params_.kBlurSize+2, cd_params_.kBlurSize+2)));
 }
 
+// 从障碍物图片中提取障碍物轮廓  这里的image是缩放过后的！！！
 void ContourDetector::ExtractContourFromImg(const cv::Mat& img, // 二值化后的图像
                                             std::vector<CVPointStack>& img_contours, 
                                             std::vector<PointStack>& realworld_contour)
 {
     cv::Mat Rimg;
-    this->ResizeAndBlurImg(img, Rimg); // 图像预处理
+    this->ResizeAndBlurImg(img, Rimg); // 图像预处理 (灰度转换 + 缩放 + 滤波)
     this->ExtractRefinedContours(Rimg, img_contours); // 提取精细轮廓
     this->ConvertContoursToRealWorld(img_contours, realworld_contour);
 }
@@ -119,12 +128,12 @@ void ContourDetector::ExtractRefinedContours(const cv::Mat& imgIn,
                                             std::vector<CVPointStack>& refined_contours) 
 { 
 
-    std::vector<std::vector<cv::Point2i>> raw_contours; // 存储所有检测到的轮廓点的集合
+    std::vector<std::vector<cv::Point2i>> raw_contours; // 存储所有检测到的轮廓点的集合  raw_contours[i] 表示第 i 条轮廓
     refined_contours.clear(), refined_hierarchy_.clear(); // 存储轮廓之间的层次结构
     // 轮廓检测
-    cv::findContours(imgIn, raw_contours, refined_hierarchy_, 
+    cv::findContours(imgIn, raw_contours, refined_hierarchy_, // refined_hierarchy_[i] 是 cv::Vec4i，表示第 i 条轮廓的关系 [next, previous, first_child, parent]
                      cv::RetrievalModes::RETR_TREE, // 检索模式: 检索所有轮廓，并创建一个包含所有轮廓的层次结构
-                     cv::ContourApproximationModes::CHAIN_APPROX_TC89_L1);
+                     cv::ContourApproximationModes::CHAIN_APPROX_TC89_L1); // 轮廓逼近方法
     // 对检测到的轮廓进行多边形近似处简化处理                
     refined_contours.resize(raw_contours.size());
     for (std::size_t i=0; i<raw_contours.size(); i++) {
@@ -133,7 +142,7 @@ void ContourDetector::ExtractRefinedContours(const cv::Mat& imgIn,
         cv::approxPolyDP(raw_contours[i], refined_contours[i], DIST_LIMIT, true); // 闭合轮廓
     }
     this->TopoFilterContours(refined_contours); // 对轮廓进行拓扑过滤
-    this->AdjecentDistanceFilter(refined_contours);
+    this->AdjecentDistanceFilter(refined_contours); // 对轮廓进行距离过滤
 }
 
 void ContourDetector::AdjecentDistanceFilter(std::vector<CVPointStack>& contoursInOut) {
@@ -153,10 +162,10 @@ void ContourDetector::AdjecentDistanceFilter(std::vector<CVPointStack>& contours
             }
         }
         /** Reduce wall nodes */
-        RemoveWallConnection(contoursInOut[i], contoursInOut[i][0], refined_idx);
+        RemoveWallConnection(contoursInOut[i], contoursInOut[i][0], refined_idx); // 第一个轮廓跟最后一个index再做检查
         contoursInOut[i].resize(refined_idx);
         if (refined_idx > 1 && FARUtil::PixelDistance(contoursInOut[i].front(), contoursInOut[i].back()) < DIST_LIMIT) {
-            contoursInOut[i].pop_back();
+            contoursInOut[i].pop_back(); // 距离太小 舍弃
         }
         if (contoursInOut[i].size() < 3) remove_idxs.insert(i);
     }

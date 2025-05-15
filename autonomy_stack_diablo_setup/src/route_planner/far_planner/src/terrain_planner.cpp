@@ -19,7 +19,7 @@ void TerrainPlanner::Init(const rclcpp::Node::SharedPtr nh, const TerrainPlanner
     Eigen::Vector3d grid_origin(0,0,0);
     Eigen::Vector3d grid_resolution(tp_params_.voxel_size, tp_params_.voxel_size, tp_params_.voxel_size);
     terrain_grids_ = std::make_unique<grid_ns::Grid<TerrainNodePtr>>(grid_size, init_terrain_node_ptr, grid_origin, grid_resolution, 3);
-    this->AllocateGridNodes(); 
+    this->AllocateGridNodes(); // 预分配地形网格内的节点数据，并分配唯一ID
     viz_path_stack_.clear();
 
     local_path_pub_   = nh_->create_publisher<Marker>("/local_terrain_path_debug", 5);
@@ -42,7 +42,7 @@ void TerrainPlanner::UpdateCenterNode(const NavNodePtr& node_ptr) {
 // 局部地形网格障碍物膨胀标记
 void TerrainPlanner::SetLocalTerrainObsCloud(const PointCloudPtr& obsCloudIn) {
     if (!is_grids_init_ || obsCloudIn->empty()) return;
-    const int N_IF = tp_params_.inflate_size; // 膨胀的网格半径
+    const int N_IF = tp_params_.inflate_size; // 膨胀的网格半径 obs_inflate_size 参数
     for (const auto& point : obsCloudIn->points) {
         Eigen::Vector3i c_sub = terrain_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, center_pos_.z));
         for (int i = -N_IF; i <= N_IF; i++) {
@@ -65,7 +65,7 @@ void TerrainPlanner::GridVisualCloud() {
     PointCloudPtr temp_cloud_ptr(new pcl::PointCloud<PCLPoint>());
     const int N = terrain_grids_->GetCellNumber();
     for (int ind=0; ind<N; ind++) {
-        if (!terrain_grids_->GetCell(ind)->is_occupied) {
+        if (!terrain_grids_->GetCell(ind)->is_occupied) { // 可视化的是未被占据的局部地形网格
             temp_cloud_ptr->points.push_back(this->Ind2PCLPoint(ind));
         }
     }

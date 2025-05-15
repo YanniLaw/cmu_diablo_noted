@@ -44,16 +44,23 @@ void ScanHandler::UpdateRobotPosition(const Point3D& robot_pos) {
     center_p_ = FARUtil::Point3DToPCLPoint(robot_pos);
 }
 
+/**
+ * @brief 根据当前帧scan点云设置体素网格的标记
+ * 
+ * @param scanCloudIn 当前帧scan点云
+ * @param freeCloudIn 附近的free点云
+ */
 void ScanHandler::SetCurrentScanCloud(const PointCloudPtr& scanCloudIn, const PointCloudPtr& freeCloudIn) {
     if (!is_grids_init_ || scanCloudIn->empty()) return;
     // remove free scan points
     PointCloudPtr copyObsScanCloud(new pcl::PointCloud<PCLPoint>());
     pcl::copyPointCloud(*scanCloudIn, *copyObsScanCloud); // 深拷贝
-    // 去掉copyObsScanCloud 中与freeCloudIn重叠的点，避免误判free点，剩下的是有可能是障碍物的点
+    // 去掉copyObsScanCloud 中与freeCloudIn重叠的点，避免误判free点，剩下的是有可能是动态障碍物的点
     FARUtil::RemoveOverlapCloud(copyObsScanCloud, freeCloudIn, true);
     for (const auto& point : copyObsScanCloud->points) { // assign obstacle scan voxels
         const float r = pcl::euclideanDistance(point, center_p_); // 激光点到机器人中心的距离
-        // 扩展标记范围 //TODO 没看懂原理是怎么来的
+        // 扩展标记范围，膨胀当前点所在的网格 ，基于激光角度分辨率 (ANG_RES_X, ANG_RES_Y) 和当前点距离 r 计算出来的膨胀范围
+        // 因为越远的障碍物扫描误差可能越大; 分辨率带来的“角度误差”投射到空间中也是随距离变大的，所以需要更大体素覆盖
         const int L = static_cast<int>(std::ceil((r * ANG_RES_X)/(scan_params_.voxel_size*3)/2.0f))+FARUtil::kObsInflate; // obs_inflate_size 参数
         const int N = static_cast<int>(std::ceil((r * ANG_RES_Y)/(scan_params_.voxel_size*3)/2.0f));
         Eigen::Vector3i c_sub = voxel_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z)); // 该点所在的网格索引
@@ -70,6 +77,8 @@ void ScanHandler::SetCurrentScanCloud(const PointCloudPtr& scanCloudIn, const Po
             }
         }
     }
+    // 对scan点云中的所有点进行射线更新Raycasting，标记贯穿的网格
+    // TODO 对所有点都进行射线更新 是否对动态障碍物检测有影响？
     for (const auto& point : scanCloudIn->points) {
         Eigen::Vector3i sub = voxel_grids_->Pos2Sub(Eigen::Vector3d(point.x, point.y, point.z));
         this->SetRayCloud(sub);
@@ -87,6 +96,12 @@ void ScanHandler::SetSurroundObsCloud(const PointCloudPtr& obsCloudIn, const boo
     }
 }
 
+/**
+ * @brief 提取动态障碍物
+ * 
+ * @param cloudIn       输入的障碍物点云
+ * @param dyObsCloudOut 提取出的动态障碍物
+ */
 void ScanHandler::ExtractDyObsCloud(const PointCloudPtr& cloudIn, const PointCloudPtr& dyObsCloudOut) {
     if (!is_grids_init_ || cloudIn->empty()) return;
     dyObsCloudOut->clear();
@@ -95,7 +110,7 @@ void ScanHandler::ExtractDyObsCloud(const PointCloudPtr& cloudIn, const PointClo
         if (!voxel_grids_->InRange(sub)) continue;
         const int ind = voxel_grids_->Sub2Ind(sub);
         const char cell_c = voxel_grids_->GetCell(ind);
-        if ((cell_c | RAY_BIT) == cell_c) {
+        if ((cell_c | RAY_BIT) == cell_c) { // (cell_c & RAY_BIT) != 0
             dyObsCloudOut->points.push_back(point);
         }
     }

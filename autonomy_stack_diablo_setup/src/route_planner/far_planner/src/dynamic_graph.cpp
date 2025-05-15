@@ -475,7 +475,7 @@ bool DynamicGraph::UpdateNodePosition(const NavNodePtr& node_ptr,
     }
     // calculate mean nav node position using RANSACS
     std::size_t inlier_size = 0;
-    Point3D mean_p = FARUtil::RANSACPoisiton(node_ptr->pos_filter_vec, dg_params_.filter_pos_margin, inlier_size); // filter_pos_margin 即kNavClearDist
+    Point3D mean_p = FARUtil::RANSACPoisiton(node_ptr->pos_filter_vec, dg_params_.filter_pos_margin, inlier_size); // filter_pos_margin 即 kNavClearDist = master_params_.robot_dim / 2.0f + FARUtil::kLeafSize;
     if (node_ptr->pos_filter_vec.size() > 1) mean_p.z = node_ptr->position.z; // keep z value with terrain updates
     node_ptr->position = mean_p;
     if (int(inlier_size) > dg_params_.finalize_thred) { // node_finalize_thred 最小的内点数
@@ -484,6 +484,7 @@ bool DynamicGraph::UpdateNodePosition(const NavNodePtr& node_ptr,
     return false;
 }
 
+// 初始化节点位置
 void DynamicGraph::InitNodePosition(const NavNodePtr& node_ptr, const Point3D& new_pos) {
     node_ptr->pos_filter_vec.clear();
     node_ptr->position = new_pos;

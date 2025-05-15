@@ -22,6 +22,7 @@ void ContourGraph::Init(const rclcpp::Node::SharedPtr nh, const ContourGraphPara
     ContourGraph::boundary_contour_set_.clear();
 }
 
+// 更新轮廓图
 void ContourGraph::UpdateContourGraph(const NavNodePtr& odom_node_ptr,
                                       const std::vector<std::vector<Point3D>>& filtered_contours) {
     odom_node_ptr_ = odom_node_ptr;
@@ -31,6 +32,7 @@ void ContourGraph::UpdateContourGraph(const NavNodePtr& odom_node_ptr,
         this->CreatePolygon(poly, new_poly_ptr); // 根据当前轮廓点创建多边形结构指针
         this->AddPolyToContourPolygon(new_poly_ptr); // 将该多边形加入到contour_polygons_ 中，该变量会在上一步ClearContourGraph清空
     }
+    // 更新free_odom_p
     ContourGraph::UpdateOdomFreePosition(odom_node_ptr_, FARUtil::free_odom_p);
     for (const auto& poly_ptr : ContourGraph::contour_polygons_) { // 遍历上一步加入的多边形轮廓数组
         poly_ptr->is_robot_inside = FARUtil::PointInsideAPoly(poly_ptr->vertices, FARUtil::free_odom_p); // 判断上一步更新的free点是否在该轮廓内

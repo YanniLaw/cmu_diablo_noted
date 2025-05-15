@@ -394,19 +394,21 @@ void MapHandler::AdjustCTNodeHeight(const CTNodeStack& ctnodes) {
 void MapHandler::ObsNeighborCloudWithTerrain(std::unordered_set<int>& neighbor_obs, std::unordered_set<int>& extend_terrain_obs) {
     std::unordered_set<int> neighbor_copy = neighbor_obs;
     neighbor_obs.clear();
-    const float R = map_params_.cell_length * 0.7071f; // sqrt(2)/2
+    const float R = map_params_.cell_length * 0.7071f; // 1 * sqrt(2)/2
     for (const auto& idx : neighbor_copy) {
         const Point3D pos = Point3D(world_obs_cloud_grid_->Ind2Pos(idx)); // 计算该索引物理位置
         bool inRange = false;
         float minH, maxH;
         // 半径查找，查找该网格中心点附近的最小/最大/平均高程值
         NearestHeightOfRadius(pos, R, minH, maxH, inRange); // 其实就是找出该osb世界点云网格内的最小/最大/平均高程值
+        // 对障碍物网格进行高程约束过滤，避免误识别
         if (inRange && pos.z + map_params_.cell_height > minH && // map_params_.cell_height = map_params_.floor_height / 2.5f = 0.4
                        pos.z - map_params_.cell_height < maxH + FARUtil::kTolerZ) // use map_params_.cell_height/2.0 as a tolerance margin
         {
             neighbor_obs.insert(idx);
         }
     }
+    // 在 z 方向上扩展障碍物网格
     extend_terrain_obs.clear(); // assign extended terrain obs indices
     const std::vector<int> inflate_vec{-1, 0};
     for (const int& idx : neighbor_obs) {
@@ -458,7 +460,7 @@ void MapHandler::UpdateTerrainHeightGrid(const PointCloudPtr& freeCloudIn, const
         this->AssignFlatTerrainCloud(terrainHeightOut, flat_terrain_cloud_); // flat_terrain_cloud_ z轴置0，Intensity赋值为terrainHeightOut的高程值
         kdtree_terrain_clould_->setInputCloud(flat_terrain_cloud_);
     }
-    // update surrounding obs cloud grid indices based on terrain
+    // update surrounding obs cloud grid indices based on terrain，基于地形更新附近障碍物网格索引列表
     this->ObsNeighborCloudWithTerrain(neighbor_obs_indices_, extend_obs_indices_); // neighbor_obs_indices_ 在这里先清空，然后重新生成
 }
 
@@ -553,7 +555,7 @@ void MapHandler::TraversableAnalysis(const PointCloudPtr& terrainHeightOut) {
     }
 }
 
-// 提取相邻障碍物点云网格的中心点
+// 提取附近障碍物点云网格的中心点
 void MapHandler::GetNeighborCeilsCenters(PointStack& neighbor_centers) {
     if (!is_init_) return;
     neighbor_centers.clear();
