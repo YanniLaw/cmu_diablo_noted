@@ -9,6 +9,7 @@ enum NodeType {
     AIR         = 2   // 空中节点
 };
 
+// 节点的自由方向判断，应用在路径规划中，机器人倾向于从凸角逃离，避免凹角卡住
 enum NodeFreeDirect {
   UNKNOW  =  0,   // 未知
   CONVEX  =  1,   // 凸
@@ -43,7 +44,7 @@ typedef std::vector<PolygonPtr> PolygonStack;
 struct CTNode
 {
     CTNode() = default;
-    Point3D position; // 轮廓节点所在位置
+    Point3D position; // 轮廓节点所在位置 小轮廓为质心
     bool is_global_match;
     bool is_contour_necessary;
     bool is_ground_associate;
@@ -51,7 +52,7 @@ struct CTNode
     NodeFreeDirect free_direct; // 节点free方向
 
     PointPair surf_dirs;
-    PolygonPtr poly_ptr;  // 多边形轮廓指针
+    PolygonPtr poly_ptr;  // 与该轮廓节点相关联的轮廓多边形指针
     std::shared_ptr<CTNode> front;  // 前驱节点
     std::shared_ptr<CTNode> back;   // 后继节点
 
@@ -66,7 +67,7 @@ struct NavNode
     NavNode() = default;
     std::size_t id;     // 节点唯一ID
     Point3D position;   // 节点位置
-    PointPair surf_dirs;
+    PointPair surf_dirs;  // 节点表面朝向(前后搜索)
     std::deque<Point3D> pos_filter_vec;
     std::deque<PointPair> surf_dirs_vec;
     CTNodePtr ctnode;

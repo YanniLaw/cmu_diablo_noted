@@ -26,30 +26,31 @@ void ContourGraph::Init(const rclcpp::Node::SharedPtr nh, const ContourGraphPara
 void ContourGraph::UpdateContourGraph(const NavNodePtr& odom_node_ptr,
                                       const std::vector<std::vector<Point3D>>& filtered_contours) {
     odom_node_ptr_ = odom_node_ptr;
-    this->ClearContourGraph(); // 清除轮廓图
+    this->ClearContourGraph(); // 清除轮廓图相关变量
     for (const auto& poly : filtered_contours) { // 遍历提取出的轮廓
         PolygonPtr new_poly_ptr = NULL;
         this->CreatePolygon(poly, new_poly_ptr); // 根据当前轮廓点创建多边形结构指针
-        this->AddPolyToContourPolygon(new_poly_ptr); // 将该多边形加入到contour_polygons_ 中，该变量会在上一步ClearContourGraph清空
+        this->AddPolyToContourPolygon(new_poly_ptr); // 将该多边形加入到 contour_polygons_ 中，该变量会在上一步ClearContourGraph清空
     }
-    // 更新free_odom_p
+    // 更新可通行点free_odom_p
     ContourGraph::UpdateOdomFreePosition(odom_node_ptr_, FARUtil::free_odom_p);
     for (const auto& poly_ptr : ContourGraph::contour_polygons_) { // 遍历上一步加入的多边形轮廓数组
-        poly_ptr->is_robot_inside = FARUtil::PointInsideAPoly(poly_ptr->vertices, FARUtil::free_odom_p); // 判断上一步更新的free点是否在该轮廓内
+        // 根据上一步更新的可通行点重新计算 is_robot_inside 参数，即判断是否还处于轮廓内
+        poly_ptr->is_robot_inside = FARUtil::PointInsideAPoly(poly_ptr->vertices, FARUtil::free_odom_p);
         CTNodePtr new_ctnode_ptr = NULL;
         if (poly_ptr->is_pillar) { // 较小的柱状轮廓
             Point3D mean_p = FARUtil::AveragePoints(poly_ptr->vertices); // 计算轮廓中心
-            this->CreateCTNode(mean_p, new_ctnode_ptr, poly_ptr, true);
-            this->AddCTNodeToGraph(new_ctnode_ptr);
-        } else { // 对于其他轮廓，就以每个轮廓点创建node
+            this->CreateCTNode(mean_p, new_ctnode_ptr, poly_ptr, true);  // 以轮廓中心坐标创建轮廓节点 ctnode
+            this->AddCTNodeToGraph(new_ctnode_ptr); // 将该轮廓节点加入到轮廓节点图graph中
+        } else { // 对于较大的其他轮廓，就以每个轮廓点坐标创建轮廓节点node
             CTNodeStack ctnode_stack;
             ctnode_stack.clear();
             const int N = poly_ptr->vertices.size(); // 该多边形轮廓点数
             for (int idx=0; idx<N; idx++) {
-                this->CreateCTNode(poly_ptr->vertices[idx], new_ctnode_ptr, poly_ptr, false);
-                ctnode_stack.push_back(new_ctnode_ptr);
+                this->CreateCTNode(poly_ptr->vertices[idx], new_ctnode_ptr, poly_ptr, false); // 以每个轮廓点坐标创建轮廓节点node
+                ctnode_stack.push_back(new_ctnode_ptr); // temp stack
             }
-            // add connections to contour nodes 设置当前node的前驱以及后继节点
+            // add connections to contour nodes 设置当前node的前驱以及后继节点 构成闭环
             for (int idx=0; idx<N; idx++) {
                 int ref_idx = FARUtil::Mod(idx-1, N); // [0,N-1]
                 ctnode_stack[idx]->front = ctnode_stack[ref_idx];
@@ -57,7 +58,8 @@ void ContourGraph::UpdateContourGraph(const NavNodePtr& odom_node_ptr,
                 ctnode_stack[idx]->back = ctnode_stack[ref_idx];
                 this->AddCTNodeToGraph(ctnode_stack[idx]);
             }
-            // add first ctnode of each polygon to poly ctnodes stack
+            // add first ctnode of each polygon to poly ctnodes stack，将第一个轮廓节点ctnode放入到多边形轮廓节点数组中
+            // polys_ctnodes_ 存储的是大轮廓的第一个轮廓节点
             if (!ctnode_stack.empty()) ContourGraph::polys_ctnodes_.push_back(ctnode_stack.front());
         }
     }
@@ -438,35 +440,39 @@ NavNodePtr ContourGraph::NearestNavNodeForCTNode(const CTNodePtr& ctnode_ptr, co
     return nearest_node;
 }
 
+// 分析所有轮廓节点的表面朝向以及凹凸性
 void ContourGraph::AnalysisSurfAngleAndConvexity(const CTNodeStack& contour_graph) {
     for (const auto& ctnode_ptr : contour_graph) { // 遍历所有轮廓ctnode
-        if (ctnode_ptr->free_direct == NodeFreeDirect::PILLAR || ctnode_ptr->poly_ptr->is_pillar) { // 小轮廓 检查漏网之鱼？
+        if (ctnode_ptr->free_direct == NodeFreeDirect::PILLAR || ctnode_ptr->poly_ptr->is_pillar) { // 对于柱状小轮廓直接标记
             ctnode_ptr->surf_dirs = {Point3D(0,0,-1), Point3D(0,0,-1)};
             ctnode_ptr->poly_ptr->is_pillar = true; // 这个参数在创建polynode的时候也设置了 
             ctnode_ptr->free_direct = NodeFreeDirect::PILLAR; // 这个参数在创建ctnode的时候已经设置了一遍
-        } else {
-            CTNodePtr next_ctnode;
+        } else { // 较大的轮廓需要其他处理  较大的轮廓每个点都构成了一个ctnode，而且每个ctnode都有前驱跟后继
+            CTNodePtr next_ctnode; // 将要进行计算的下一个节点
             // front direction
             next_ctnode = ctnode_ptr->front;
             Point3D start_p = ctnode_ptr->position;
             Point3D end_p = next_ctnode->position;
             float edist = (end_p - ctnode_ptr->position).norm_flat(); // 与前驱节点的水平方向距离
-            // 向前搜索，直到遇到足够远的节点(edist > kNavClearDist) 或者 搜索失败 (next_ctnode == nullptr)
-            while (next_ctnode != NULL && next_ctnode != ctnode_ptr && edist < FARUtil::kNavClearDist) {
+            // 向前搜索，直到遇到足够远的节点(edist > kNavClearDist) 或者 搜索完成 (next_ctnode == ctnode_ptr) 就退出该循环
+            // 一般来说 next_ctnode == NULL 这个条件不会触发，因为在构造轮廓节点ctnode的时候形成了闭环
+            while (next_ctnode != NULL && next_ctnode != ctnode_ptr && edist < FARUtil::kNavClearDist) { // nav_clear_dist 参数
                 next_ctnode = next_ctnode->front;
                 start_p = end_p;
                 end_p = next_ctnode->position;
-                edist = (end_p - ctnode_ptr->position).norm_flat();
+                edist = (end_p - ctnode_ptr->position).norm_flat(); // 搜索节点到选定节点的水平距离
             }
+            // 前向搜索该节点所在轮廓的所有节点都搜索完了，但是到该节点的距离还是很近，就说明这是一个小轮廓 对应搜索完成的退出情况 (next_ctnode == ctnode_ptr)
+            // TODO  是否将该ctnode所在轮廓的所有节点都进行设置????
             if (edist < FARUtil::kNavClearDist) { // This Node should be a pillar.
                 ctnode_ptr->surf_dirs = {Point3D(0,0,-1), Point3D(0,0,-1)};
                 ctnode_ptr->poly_ptr->is_pillar = true;
                 ctnode_ptr->free_direct = NodeFreeDirect::PILLAR;
                 continue;
-            } else {
+            } else { // 对应 edist > kNavClearDist 的退出情况 ， 计算该节点前向搜索的最佳表面朝向
                 ctnode_ptr->surf_dirs.first = FARUtil::ContourSurfDirs(end_p, start_p, ctnode_ptr->position, FARUtil::kNavClearDist);
             }
-            // back direction
+            // back direction，同理，计算后向搜索的相关参数
             next_ctnode = ctnode_ptr->back;
             start_p = ctnode_ptr->position;
             end_p   = next_ctnode->position;
@@ -536,16 +542,16 @@ void ContourGraph::AnalysisConvexityOfCTNode(const CTNodePtr& ctnode_ptr) {
         return;
     }
     bool is_wall = false;
-    const Point3D topo_dir = FARUtil::SurfTopoDirect(ctnode_ptr->surf_dirs, is_wall);
+    const Point3D topo_dir = FARUtil::SurfTopoDirect(ctnode_ptr->surf_dirs, is_wall); // 计算表面拓扑方向
     if (is_wall) { // 墙壁点处理
-        ctnode_ptr->free_direct = NodeFreeDirect::UNKNOW;
+        ctnode_ptr->free_direct = NodeFreeDirect::UNKNOW; // 无法计算出有效方向，两个方向对称抵消，标记为 未知类型
         return;
     }
     const Point3D ev_p = ctnode_ptr->position + topo_dir * FARUtil::kLeafSize;
     if (FARUtil::IsConvexPoint(ctnode_ptr->poly_ptr, ev_p)) {
-        ctnode_ptr->free_direct = NodeFreeDirect::CONVEX;
+        ctnode_ptr->free_direct = NodeFreeDirect::CONVEX;   // 凸角逃离
     } else {
-        ctnode_ptr->free_direct = NodeFreeDirect::CONCAVE;
+        ctnode_ptr->free_direct = NodeFreeDirect::CONCAVE;  // 凹角卡住
     }
 }
 
@@ -660,19 +666,26 @@ bool ContourGraph::IsValidBoundary(const NavNodePtr& node_ptr1, const NavNodePtr
     return true;
 }
 
+/**
+ * @brief 根据odom导航节点以及当前的多边形轮廓，找到一个可通行的点
+ * 
+ * @param odom_ptr odom导航节点
+ * @param global_free_p 计算出来的可通行点，如果找不到，那么为odom节点坐标
+ */
 void ContourGraph::UpdateOdomFreePosition(const NavNodePtr& odom_ptr, Point3D& global_free_p) {
     Point3D free_p = odom_ptr->position;
     bool is_free_p = true;
     PointStack free_sample_points;
     for (const auto& poly_ptr : ContourGraph::contour_polygons_) { // 遍历所有多边形轮廓
+        // is_robot_inside 为 true 则表明当前机器人位置处于某个轮廓内部，因为该变量是根据实时的odom位置计算出来的
         if (!poly_ptr->is_pillar && poly_ptr->is_robot_inside) { // 如果非柱状(轮廓比较大)且机器人处于该轮廓内部
             is_free_p = false;
             // 在机器人位置周围生成一系列栅格采样点集合
-            FARUtil::CreatePointsAroundCenter(free_p, FARUtil::kNavClearDist, FARUtil::kLeafSize, free_sample_points);
+            FARUtil::CreatePointsAroundCenter(free_p, FARUtil::kNavClearDist, FARUtil::kLeafSize, free_sample_points); // nav_clear_dist 参数
             break;
         }
     }
-    if (is_free_p) is_robot_inside_poly_ = false;
+    if (is_free_p) is_robot_inside_poly_ = false; // 机器人当前位置不在多边形轮廓内部
     global_free_p = free_p; // 先赋值，如果该点不是free的，后面再找一个free的
     if (!is_free_p && !is_robot_inside_poly_) { // 如果机器人在多边形轮廓内部 且 刚刚重置了环境(只有这样才会is_free_p为false的情况下is_robot_inside_poly_也为false)
         bool is_free_pos_found = false;
@@ -682,10 +695,10 @@ void ContourGraph::UpdateOdomFreePosition(const NavNodePtr& odom_ptr, Point3D& g
             for (const auto& poly_ptr : ContourGraph::contour_polygons_) {
                 if (!poly_ptr->is_pillar && FARUtil::PointInsideAPoly(poly_ptr->vertices, p)) {
                     is_sample_free = false;
-                    break;
+                    break; //TODO 有一个不满足就退出???? 应该是所有都不满足才退出吧！
                 }
             }
-            if (is_sample_free) {
+            if (is_sample_free) { // 有一个free点就退出  不进行选择么？
                 global_free_p = p;
                 is_free_pos_found = true;
                 break;

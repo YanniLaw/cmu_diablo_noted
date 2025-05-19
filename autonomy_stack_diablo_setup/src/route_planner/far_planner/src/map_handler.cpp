@@ -374,11 +374,11 @@ void MapHandler::AdjustNodesHeight(const NodePtrStack& nodes) {
 
 void MapHandler::AdjustCTNodeHeight(const CTNodeStack& ctnodes) {
     if (ctnodes.empty()) return;
-    const float H_MAX = FARUtil::robot_pos.z + FARUtil::kTolerZ;
+    const float H_MAX = FARUtil::robot_pos.z + FARUtil::kTolerZ; // kTolerZ = floor_height - height_voxel_dim 参数
     const float H_MIN = FARUtil::robot_pos.z - FARUtil::kTolerZ;
     for (auto& ctnode_ptr : ctnodes) {
         float min_th, max_th;
-        // 查询节点位置附近范围内的最近邻点(地形点)
+        // 查询节点位置附近范围内的最近邻点(地形点) kMatchDist = height_voxel_dim = voxel_dim * 2.0f;
         NearestHeightOfRadius(ctnode_ptr->position, FARUtil::kMatchDist, min_th, max_th, ctnode_ptr->is_ground_associate);
         if (ctnode_ptr->is_ground_associate) { // 在该范围内搜索到了最近邻点，节点与地面有关
             ctnode_ptr->position.z = min_th + FARUtil::vehicle_height;
@@ -386,7 +386,7 @@ void MapHandler::AdjustCTNodeHeight(const CTNodeStack& ctnodes) {
         } else { // 未搜索到最近邻点
             ctnode_ptr->position.z = TerrainHeightOfPoint(ctnode_ptr->position, ctnode_ptr->is_ground_associate, true);
             ctnode_ptr->position.z += FARUtil::vehicle_height;
-            ctnode_ptr->position.z = std::max(std::min(ctnode_ptr->position.z, H_MAX), H_MIN);
+            ctnode_ptr->position.z = std::max(std::min(ctnode_ptr->position.z, H_MAX), H_MIN); // 限制范围
         }
     }
 }
